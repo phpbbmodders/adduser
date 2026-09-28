@@ -1,7 +1,7 @@
 {
     "name": "phpbbmodders/adduser",
     "type": "phpbb-extension",
-    "description": "Allows administrators to add users to their board.",
+    "description": "Lets administrators create user accounts from the ACP.",
     "homepage": "https://www.phpbbmodders.com/",
     "version": "1.0.5",
     "time": "2026-09-28",
