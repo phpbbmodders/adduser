@@ -2,19 +2,19 @@ Subject: You have been added to "{SITENAME}"
 
 {WELCOME_MSG}
 
-Please keep this e-mail for your records. Your account information is as follows:
+You need your username to log in. Keep it:
 
 ----------------------------
 Username: {USERNAME}
 
 Board URL: {U_BOARD}
-
-Password: {PASSWORD}
 ----------------------------
 
-Your password has been securely stored in our database and cannot be retrieved. In the event that it is forgotten, you will be able to reset it using the e-mail address associated with your account.
+Use this link to set your own password:
 
-We strongly recommend that you change your password once you log into the forum.
+{U_RESET_PASSWORD}
+
+The link is valid until {RESET_EXPIRES}. After that, use “Forgot password” at {U_BOARD}.
 
 
 {EMAIL_SIG}

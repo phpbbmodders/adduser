@@ -99,21 +99,35 @@ class adduser_module
 			// Create a new password for our user only if there is nothing  for a password already
 			if (empty($data['new_password']) && empty($data['password_confirm']))
 			{
-				if ($this->config['pass_complex'] == 'PASS_TYPE_ANY' || $this->config['pass_complex'] == 'PASS_TYPE_CASE')
+				// The password is never emailed, the user sets their own via the reset
+				// link. Draw it from random_int rather than from the current time, and
+				// take one character from every class validate_password() demands.
+				$pools = ['abcdefghijkmnopqrstuvwxyz', 'ABCDEFGHJKLMNPQRSTUVWXYZ', '23456789'];
+				if (!in_array($this->config['pass_complex'], ['PASS_TYPE_ANY', 'PASS_TYPE_CASE', 'PASS_TYPE_ALPHA'], true))
 				{
-					$new_password = str_split(base64_encode(md5(time() . $data['username'])), $this->config['min_pass_chars'] + rand(3, 5));
-					$data['new_password'] = $data['password_confirm'] = $new_password[0];
+					// PASS_TYPE_SYMBOL, or an invalid setting, which phpBB treats as the strictest one
+					$pools[] = '{}[];:,./<>?_+~!@#';
 				}
-				else if ($this->config['pass_complex'] == 'PASS_TYPE_ALPHA')
+				$all = implode('', $pools);
+				$length = max(20, (int) $this->config['min_pass_chars']);
+				$new_password = '';
+				foreach ($pools as $pool)
 				{
-					$new_password = $this->generate_password($this->config['min_pass_chars'] + rand(3, 5), 'PASS_TYPE_ALPHA');
-					$data['new_password'] = $data['password_confirm'] = $new_password;
+					$new_password .= $pool[random_int(0, strlen($pool) - 1)];
 				}
-				else
+				for ($i = strlen($new_password); $i < $length; $i++)
 				{
-					$new_password = $this->generate_password($this->config['min_pass_chars'] + rand(3, 5), 'PASS_TYPE_SYMBOL');
-					$data['new_password'] = $data['password_confirm'] = $new_password;
+					$new_password .= $all[random_int(0, strlen($all) - 1)];
 				}
+				// str_shuffle() draws from the Mersenne Twister, so shuffle by hand
+				for ($i = strlen($new_password) - 1; $i > 0; $i--)
+				{
+					$j = random_int(0, $i);
+					$swap = $new_password[$i];
+					$new_password[$i] = $new_password[$j];
+					$new_password[$j] = $swap;
+				}
+				$data['new_password'] = $data['password_confirm'] = $new_password;
 			}
 
 			// Validate entries
@@ -281,12 +295,32 @@ class adduser_module
 					$messenger->headers('X-AntiAbuse: Username - ' . $this->user->data['username']);
 					$messenger->headers('X-AntiAbuse: User IP - ' . $this->user->ip);
 
-					$messenger->assign_vars([
-						'WELCOME_MSG'	=> htmlspecialchars_decode(sprintf($this->user->lang['WELCOME_SUBJECT'], $this->config['sitename'])),
-						'USERNAME'		=> htmlspecialchars_decode($data['username']),
-						'PASSWORD'		=> htmlspecialchars_decode($data['new_password']),
+					// Send a reset link instead of the password: the user picks their own.
+					// route() ends in append_sid(), which would attach the session id of the
+					// admin creating the account. That must not travel by email.
+					$reset_expires = \phpbb\user::get_token_expiration();
+					$reset_token = strtolower(gen_rand_string(32));
+					$this->db->sql_query('UPDATE ' . USERS_TABLE . "
+						SET reset_token = '" . $this->db->sql_escape($reset_token) . "',
+							reset_token_expiration = " . (int) $reset_expires . '
+						WHERE user_id = ' . (int) $this->user_id);
+					global $_SID;
+					$sid_backup = $_SID;
+					$_SID = '';
+					$reset_link = generate_board_url(true) . $phpbb_container->get('controller.helper')->route(
+						'phpbb_ucp_reset_password_controller',
+						['u' => (int) $this->user_id, 'token' => $reset_token],
+						false
+					);
+					$_SID = $sid_backup;
 
-						'U_ACTIVATE'	=> "$server_url/ucp.$phpEx?mode=activate&u=$this->user_id&k=$this->user_actkey",
+					$messenger->assign_vars([
+						'WELCOME_MSG'		=> htmlspecialchars_decode(sprintf($this->user->lang['WELCOME_SUBJECT'], $this->config['sitename'])),
+						'USERNAME'			=> htmlspecialchars_decode($data['username']),
+						'U_RESET_PASSWORD'	=> $reset_link,
+						'RESET_EXPIRES'		=> $this->user->format_date($reset_expires, str_replace('|', '', $this->user->lang['DATETIME_FORMAT'])),
+
+						'U_ACTIVATE'		=> "$server_url/ucp.$phpEx?mode=activate&u=$this->user_id&k=$this->user_actkey",
 					]);
 
 					$messenger->send(NOTIFY_EMAIL);
@@ -401,49 +435,6 @@ class adduser_module
 		$cp->generate_profile_fields('profile', $this->user->get_iso_lang_id());
 	}
 
-	// Function to generate passwords
-	private function generate_password($length, $type)
-	{
-		$lowercase = "abcdefghijklmnopqrstuvwxyz";
-		$uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-		$numbers = "1234567890";
-		$specialcharacters = "{}[];:,./<>?_+~!@#";
-
-		$pword_string = '';
-
-		$max = strlen($lowercase) - 1;
-
-		for ($x = 0; $x < abs($length/3); $x++)
-		{
-			$pword_string .= $lowercase[mt_rand(0, $max)];
-		}
-
-		$max = strlen($uppercase) - 1;
-
-		for ($x = 0; $x < abs($length/3); $x++)
-		{
-			$pword_string .= $uppercase[mt_rand(0, $max)];
-		}
-
-		$max = strlen($numbers) - 1;
-
-		for ($x = 0; $x < abs($length/3); $x++)
-		{
-			$pword_string .= $numbers[mt_rand(0, $max)];
-		}
-
-		if ($type == 'PASS_TYPE_SYMBOL')
-		{
-			$max = strlen($specialcharacters) - 1;
-
-			for ($x = 0; $x < abs($length/3); $x++)
-			{
-				$pword_string .= $specialcharacters[mt_rand(0, $max)];
-			}
-		}
-
-		return str_shuffle($pword_string);
-	}
 
 	// Function to return groups that are allowed
 	private function get_groups($group_selected)
