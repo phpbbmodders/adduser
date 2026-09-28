@@ -42,10 +42,10 @@ $lang = array_merge($lang, [
 	'ACP_ADD_USER'					=> 'Add User',
 	'DIR_NOT_EXIST'					=> 'The language you have chosen %s does not have the files needed for the extension. Please translate them and upload to the %s directory of the extension.',
 	'ACP_ACCOUNT_ADDED'				=> 'The user account has been created. A link was sent to the email address you provided; the user sets their own password with it. The email states how long the link is valid.',
-	'ACP_ACCOUNT_INACTIVE'			=> 'The user account has been created. However, the forum settings require the user to activate their account.<br>An activation key has been sent to the email address you provided for the user.',
+	'ACP_ACCOUNT_INACTIVE'			=> 'The user account has been created. However, the forum settings require the user to activate their account.<br>An activation key has been sent to the email address you provided for the user. After activating, the user sets their own password with “Forgot password”.',
 	'ACP_ACCOUNT_INACTIVE_ADMIN'	=> 'The user account has been created. However, the forum settings require account activation by an administrator.<br>An email has been sent to the Administrators and the user will be informed when their account has been activated',
 	'ACP_ADMIN_ACTIVATE'			=> 'An email will be dispatched to an Administrator for account activation. Alternatively you may check the activate account box below to activate the account instantly once created. The user will receive a link to set their own password.',
-	'ACP_EMAIL_ACTIVATE'			=> 'Once the account has been created, the user will receive an email containing an activation link to activate the account.',
+	'ACP_EMAIL_ACTIVATE'			=> 'Once the account has been created, the user will receive an email containing an activation link to activate the account. After activating, they set their own password with “Forgot password”.',
 	'ACP_INSTANT_ACTIVATE'			=> 'The account will be activated instantly. The user will receive a link to set their own password.',
 
 	'ADD_USER'					=> 'Add User',

@@ -260,11 +260,16 @@ class adduser_module
 
 				// Send a message to the user if needed
 				$message = [];
+				$send_reset_link = true;
 
 				if ($this->config['require_activation'] == USER_ACTIVATION_SELF && $this->config['email_enable'])
 				{
 					$message[] = $this->user->lang['ACP_ACCOUNT_INACTIVE'];
 					$email_template = '@phpbbmodders_adduser/user_added_inactive';
+					// Activating the account clears reset_token (ucp_activate), and the reset
+					// form refuses inactive users, so a link could never be used here. The
+					// email tells the user to use "Forgot password" once activated instead.
+					$send_reset_link = false;
 				}
 				else if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->config['email_enable'] && !$admin_activate)
 				{
@@ -295,33 +300,39 @@ class adduser_module
 					$messenger->headers('X-AntiAbuse: Username - ' . $this->user->data['username']);
 					$messenger->headers('X-AntiAbuse: User IP - ' . $this->user->ip);
 
-					// Send a reset link instead of the password: the user picks their own.
-					// route() ends in append_sid(), which would attach the session id of the
-					// admin creating the account. That must not travel by email.
-					$reset_expires = \phpbb\user::get_token_expiration();
-					$reset_token = strtolower(gen_rand_string(32));
-					$this->db->sql_query('UPDATE ' . USERS_TABLE . "
-						SET reset_token = '" . $this->db->sql_escape($reset_token) . "',
-							reset_token_expiration = " . (int) $reset_expires . '
-						WHERE user_id = ' . (int) $this->user_id);
-					global $_SID;
-					$sid_backup = $_SID;
-					$_SID = '';
-					$reset_link = generate_board_url(true) . $phpbb_container->get('controller.helper')->route(
-						'phpbb_ucp_reset_password_controller',
-						['u' => (int) $this->user_id, 'token' => $reset_token],
-						false
-					);
-					$_SID = $sid_backup;
-
 					$messenger->assign_vars([
 						'WELCOME_MSG'		=> htmlspecialchars_decode(sprintf($this->user->lang['WELCOME_SUBJECT'], $this->config['sitename'])),
 						'USERNAME'			=> htmlspecialchars_decode($data['username']),
-						'U_RESET_PASSWORD'	=> $reset_link,
-						'RESET_EXPIRES'		=> $this->user->format_date($reset_expires, str_replace('|', '', $this->user->lang['DATETIME_FORMAT'])),
 
 						'U_ACTIVATE'		=> "$server_url/ucp.$phpEx?mode=activate&u=$this->user_id&k=$this->user_actkey",
 					]);
+
+					if ($send_reset_link)
+					{
+						// Send a reset link instead of the password: the user picks their own.
+						// route() ends in append_sid(), which would attach the session id of the
+						// admin creating the account. That must not travel by email.
+						$reset_expires = \phpbb\user::get_token_expiration();
+						$reset_token = strtolower(gen_rand_string(32));
+						$this->db->sql_query('UPDATE ' . USERS_TABLE . "
+							SET reset_token = '" . $this->db->sql_escape($reset_token) . "',
+								reset_token_expiration = " . (int) $reset_expires . '
+							WHERE user_id = ' . (int) $this->user_id);
+						global $_SID;
+						$sid_backup = $_SID;
+						$_SID = '';
+						$reset_link = generate_board_url(true) . $phpbb_container->get('controller.helper')->route(
+							'phpbb_ucp_reset_password_controller',
+							['u' => (int) $this->user_id, 'token' => $reset_token],
+							false
+						);
+						$_SID = $sid_backup;
+
+						$messenger->assign_vars([
+							'U_RESET_PASSWORD'	=> $reset_link,
+							'RESET_EXPIRES'		=> $this->user->format_date($reset_expires, str_replace('|', '', $this->user->lang['DATETIME_FORMAT'])),
+						]);
+					}
 
 					$messenger->send(NOTIFY_EMAIL);
 				}

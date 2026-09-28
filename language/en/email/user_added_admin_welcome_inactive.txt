@@ -12,11 +12,11 @@ Board URL: {U_BOARD}
 
 Your account is currently inactive and will need to be approved by an administrator before you can log in. Another e-mail will be sent when this has occurred.
 
-Use this link to set your own password:
+Use this link to set your own password once an administrator has activated your account. Before that, it does not work:
 
 {U_RESET_PASSWORD}
 
-The link is valid until {RESET_EXPIRES}. After that, use “Forgot password” at {U_BOARD}.
+The link is valid until {RESET_EXPIRES}. If your account is activated after that, use “Forgot password” at {U_BOARD}.
 
 
 {EMAIL_SIG}

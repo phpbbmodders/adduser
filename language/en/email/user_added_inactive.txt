@@ -14,11 +14,7 @@ Please visit the following link in order to activate your account:
 
 {U_ACTIVATE}
 
-Use this link to set your own password:
-
-{U_RESET_PASSWORD}
-
-The link is valid until {RESET_EXPIRES}. After that, use “Forgot password” at {U_BOARD}.
+After you have activated your account, set your own password with “Forgot password” at {U_BOARD}.
 
 
 {EMAIL_SIG}
