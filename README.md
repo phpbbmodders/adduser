@@ -7,9 +7,9 @@ Lets administrators create user accounts from the ACP.
 ## Features
 
 - New **Add User** page under **ACP → Users and Groups**.
-- Set username, email, password (left blank, one is generated), language and birthday.
+- Set username, email, password (left blank, a random one is generated and never emailed), language and birthday.
 - Choose the user's group and optionally make it their default group; optionally add them to *Newly registered users*.
-- Follows the board's activation setting: the new user gets their login details by email, or with admin activation you can activate the account on the spot.
+- Follows the board's activation setting: the new user gets an email with a link to set their own password, or with admin activation you can activate the account on the spot.
 - Every account created is recorded in the admin log.
 
 ## Requirements
