@@ -3,7 +3,7 @@
     "type": "phpbb-extension",
     "description": "Lets administrators create user accounts from the ACP.",
     "homepage": "https://www.phpbbmodders.com/",
-    "version": "1.0.5",
+    "version": "1.0.7-dev",
     "time": "2026-09-28",
     "keywords": [
         "phpbb",
