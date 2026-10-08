@@ -24,6 +24,10 @@ Lets administrators create user accounts from the ACP.
 3. Enable the **Add User** extension
 4. Add users under **ACP → Users and Groups → Add User**
 
+## TODO
+
+Ideas not yet built, practical and speculative alike: [`docs/TODO.md`](docs/TODO.md).
+
 ## Contributing
 
 Contributions are welcome!
