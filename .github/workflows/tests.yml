@@ -34,8 +34,8 @@ jobs:
       # Default: '3.3.x'
       PHPBB_BRANCH: '3.3.x'
 
-      # Run phpBB's EPV (Extension Pre Validator)?
-      EPV: 1
+      # Run phpBB's EPV (Extension Pre Validator) here? The epv job below runs it instead.
+      EPV: 0
 
       # Check for files with executable permissions?
       EXECUTABLE_FILES: 1
@@ -79,3 +79,10 @@ jobs:
 
       # Generate a code coverage report (see documentation below)?
       CODECOV: 0
+
+  # EPV (Extension Pre Validator), failing on any Fatal or Error finding not
+  # listed in .github/epv-allowed.txt
+  epv:
+    uses: phpbbmodders/.github/.github/workflows/epv.yml@v1
+    with:
+      EXTNAME: phpbbmodders/adduser
