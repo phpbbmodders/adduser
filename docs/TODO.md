@@ -48,3 +48,15 @@ Review the discussion before drafting the reply, explain the available CSV
 workflow and its limits, and include the release version and download link.
 Obtain approval of the complete draft before posting, then check the live
 reply. This remains pending until the functionality is available to users.
+
+## Optional administrator copy of welcome emails
+
+Add an optional ACP setting, disabled by default, to send an administrator
+an email copy when ACP Add User sends a welcome email to a newly created
+user. This provides confirmation of the welcome email sent by the extension.
+The request comes from this [ACP Add User support topic](https://www.phpbb.com/customise/db/extension/acp_add_user_2/support/topic/239096).
+
+ACP Add User no longer emails passwords; preserve that behavior. Check the
+target phpBB branch's email mechanisms before implementation, decide which
+administrator address receives the copy, and ensure activation or
+password-setting links are handled appropriately in the administrator copy.
