@@ -1,5 +1,7 @@
-# Normalize line endings to LF in the repository
+# Shared line endings and binary files
 * text=auto eol=lf
+
+# Normalize line endings to LF in the repository
 
 # Never convert line endings in binary files
 *.png binary
