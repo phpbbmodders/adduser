@@ -60,3 +60,18 @@ ACP Add User no longer emails passwords; preserve that behavior. Check the
 target phpBB branch's email mechanisms before implementation, decide which
 administrator address receives the copy, and ensure activation or
 password-setting links are handled appropriately in the administrator copy.
+
+## Newly Registered Users as the default group
+
+Accepted by William on 10/29/2026, following this
+[default-group request](https://www.phpbb.com/customise/db/extension/acp_add_user_2/support/topic/236106).
+
+Allow ACP-created accounts to use Newly Registered Users as their default
+group. Existing new-user membership controls do not provide this exact
+behavior: the group selector currently excludes Newly Registered Users.
+
+Before implementation, settle whether this is an explicit form choice or a
+configurable default. Preserve Registered Users membership and phpBB's
+new-user/post-limit rules, including boards where that restriction is
+disabled. Keep default-group selection consistent with the existing
+new-user option and reuse the behavior in the planned CSV mode.
