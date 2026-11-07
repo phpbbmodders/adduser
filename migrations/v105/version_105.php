@@ -15,7 +15,7 @@ namespace phpbbmodders\adduser\migrations\v105;
  */
 class version_105 extends \phpbb\db\migration\migration
 {
-	static public function depends_on()
+	public static function depends_on()
 	{
 		return ['\phpbbmodders\adduser\migrations\v104\version_104'];
 	}
