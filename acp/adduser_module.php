@@ -12,11 +12,62 @@ namespace phpbbmodders\adduser\acp;
 
 /**
  * Add User ACP module
+ *
+ * Mode "main" creates one account from a form, mode "csv" creates many from
+ * an uploaded CSV file. Both create every account through create_account().
  */
 class adduser_module
 {
+	/** @var int Most data rows one CSV upload may hold */
+	const CSV_MAX_ROWS = 50;
+
+	/** @var int Largest CSV file accepted, in bytes */
+	const CSV_MAX_BYTES = 1048576;
+
 	/** @var string */
 	public $u_action;
+
+	/** @var string */
+	public $page_title;
+
+	/** @var string */
+	public $tpl_name;
+
+	/** @var \phpbb\config\config */
+	protected $config;
+
+	/** @var \phpbb\db\driver\driver_interface */
+	protected $db;
+
+	/** @var \phpbb\log\log_interface */
+	protected $log;
+
+	/** @var \phpbb\request\request_interface */
+	protected $request;
+
+	/** @var \phpbb\template\template */
+	protected $template;
+
+	/** @var \phpbb\user */
+	protected $user;
+
+	/** @var \Symfony\Component\DependencyInjection\ContainerInterface */
+	protected $phpbb_container;
+
+	/** @var string */
+	protected $phpbb_root_path;
+
+	/** @var string */
+	protected $phpbb_admin_path;
+
+	/** @var string */
+	protected $php_ext;
+
+	/** @var \phpbb\language\language */
+	protected $language;
+
+	/** @var int|null Cached by get_registered_group_id() */
+	protected $registered_group_id;
 
 	public function main($id, $mode)
 	{
@@ -25,17 +76,14 @@ class adduser_module
 		$this->config = $config;
 		$this->log = $phpbb_container->get('log');
 		$this->db = $db;
+		$this->request = $request;
+		$this->template = $template;
 		$this->user = $user;
-
-		$admin_activate = ($request->variable('activate', 0)) ? (($this->config['require_activation'] == USER_ACTIVATION_ADMIN) ? true : false) : false;
-		$group_default = $request->variable('group_default', 0);
-		$group_selected = $request->variable('group', 0);
-		$new_user = $request->variable('new_user', 0);
-
-		$this->page_title = $this->user->lang['ACP_ADD_USER'];
-
-		// Load a template from adm/style for our ACP page
-		$this->tpl_name = 'acp_adduser';
+		$this->language = $phpbb_container->get('language');
+		$this->phpbb_container = $phpbb_container;
+		$this->phpbb_root_path = $phpbb_root_path;
+		$this->phpbb_admin_path = $phpbb_admin_path;
+		$this->php_ext = $phpEx;
 
 		// Include files needed to add a user
 		if (!function_exists('user_add'))
@@ -44,18 +92,34 @@ class adduser_module
 		}
 
 		// Include lang files
-		$this->user->add_lang(['posting', 'ucp', 'acp/users', 'acp/groups']);
+		$this->language->add_lang(['posting', 'ucp', 'acp/users', 'acp/groups']);
+
+		if ($mode === 'csv')
+		{
+			$this->csv_page();
+			return;
+		}
+
+		$admin_activate = ($request->variable('activate', 0)) ? (($this->config['require_activation'] == USER_ACTIVATION_ADMIN) ? true : false) : false;
+		$group_default = $request->variable('group_default', 0);
+		$group_selected = $request->variable('group', 0);
+		$new_user = $request->variable('new_user', 0);
+
+		$this->page_title = $this->language->lang('ACP_ADD_USER');
+
+		// Load a template from adm/style for our ACP page
+		$this->tpl_name = 'acp_adduser';
 
 		// Add custom profile fields
 		$cp = $phpbb_container->get('profilefields.manager');
 
 		// Set empty error strings
-		$error = $cp_data = $cp_error = [];
+		$error = $cp_data = [];
 
 		// Define the name of the form for use as a form key
 		add_form_key('acp_adduser');
 
-		// Try to automatically determine the timezone and daylight savings time settings
+		// New accounts start out in the board's timezone
 		$timezone = $this->config['board_timezone'];
 
 		$data = [
@@ -68,13 +132,11 @@ class adduser_module
 			'group'				=> $request->variable('group', 0),
 		];
 
-		// Build an array of all lang directories for the extension and check to make sure the lang being chosen
-		// is available. If the lang isn't present then errors will present themselves due to no email template found.
-		$dir_array = $this->dir_to_array($phpbb_root_path . 'ext/phpbbmodders/adduser/language');
-
-		if (!in_array($data['lang'], $dir_array))
+		// The lang being chosen must have the extension's language files. If it doesn't,
+		// errors will present themselves due to no email template found.
+		if (!$this->extension_has_language($data['lang']))
 		{
-			trigger_error(sprintf($this->user->lang['DIR_NOT_EXIST'], $data['lang'], $data['lang']), E_USER_WARNING);
+			trigger_error(sprintf($this->language->lang('ADDUSER_DIR_NOT_EXIST'), $data['lang'], $data['lang']), E_USER_WARNING);
 		}
 
 		if ($this->config['allow_birthdays'])
@@ -96,262 +158,54 @@ class adduser_module
 				trigger_error('FORM_INVALID');
 			}
 
-			// Create a new password for our user only if there is nothing  for a password already
+			// Create a new password for our user only if there is nothing for a password already
 			if (empty($data['new_password']) && empty($data['password_confirm']))
 			{
-				// The password is never emailed, the user sets their own via the reset
-				// link. Draw it from random_int rather than from the current time, and
-				// take one character from every class validate_password() demands.
-				$pools = ['abcdefghijkmnopqrstuvwxyz', 'ABCDEFGHJKLMNPQRSTUVWXYZ', '23456789'];
-				if (!in_array($this->config['pass_complex'], ['PASS_TYPE_ANY', 'PASS_TYPE_CASE', 'PASS_TYPE_ALPHA'], true))
-				{
-					// PASS_TYPE_SYMBOL, or an invalid setting, which phpBB treats as the strictest one
-					$pools[] = '{}[];:,./<>?_+~!@#';
-				}
-				$all = implode('', $pools);
-				$length = max(20, (int) $this->config['min_pass_chars']);
-				$new_password = '';
-				foreach ($pools as $pool)
-				{
-					$new_password .= $pool[random_int(0, strlen($pool) - 1)];
-				}
-				for ($i = strlen($new_password); $i < $length; $i++)
-				{
-					$new_password .= $all[random_int(0, strlen($all) - 1)];
-				}
-				// str_shuffle() draws from the Mersenne Twister, so shuffle by hand
-				for ($i = strlen($new_password) - 1; $i > 0; $i--)
-				{
-					$j = random_int(0, $i);
-					$swap = $new_password[$i];
-					$new_password[$i] = $new_password[$j];
-					$new_password[$j] = $swap;
-				}
-				$data['new_password'] = $data['password_confirm'] = $new_password;
+				$data['new_password'] = $data['password_confirm'] = $this->generate_password();
 			}
 
 			// Validate entries
-			$validate_array = [
-				'username'			=> [
-					['string', false, $this->config['min_name_chars'], $this->config['max_name_chars']],
-					['username', '']],
-				'email'				=> [
-					['string', false, 6, 60],
-					['user_email']],
-				'new_password'		=> [
-					['string', false, $this->config['min_pass_chars'], $this->config['max_pass_chars']],
-					['password']],
-				'password_confirm'	=> ['string', false, $this->config['min_pass_chars'], $this->config['max_pass_chars']],
-				'tz'				=> ['timezone'],
-				'lang'				=> ['language_iso_name'],
-			];
-
-			if ($this->config['allow_birthdays'])
-			{
-				$validate_array = array_merge($validate_array, [
-					'bday_day'		=> ['num', true, 1, 31],
-					'bday_month'	=> ['num', true, 1, 12],
-					'bday_year'		=> ['num', true, 1901, gmdate('Y', time()) + 50],
-					'user_birthday'	=> ['date', true],
-				]);
-			}
+			$validate_array = $this->get_validate_array();
+			$validate_array['password_confirm'] = ['string', false, $this->config['min_pass_chars'], $this->config['max_pass_chars']];
 
 			$error = validate_data($data, $validate_array);
 
 			// Validate custom profile fields
 			$cp->submit_cp_field('profile', $this->user->get_iso_lang_id(), $cp_data, $error);
 
-			if (count($cp_error))
-			{
-				$error = array_merge($error, $cp_error);
-			}
-
 			if ($data['new_password'] != $data['password_confirm'])
 			{
-				$error[] = $this->user->lang['NEW_PASSWORD_ERROR'];
+				$error[] = $this->language->lang('NEW_PASSWORD_ERROR');
+			}
+
+			// Only the groups offered in the selector may be posted
+			if ($data['group'] && !isset($this->get_allowed_groups()[$data['group']]))
+			{
+				$error[] = 'ADDUSER_GROUP_NOT_ALLOWED';
 			}
 
 			// Replace "error" strings with their real, localised form
-			$error = array_map([$this->user, 'lang'], $error);
+			$error = array_map([$this->language, 'lang'], $error);
 
 			if (!count($error))
 			{
-				$server_url = generate_board_url();
+				$data['password_hash'] = $phpbb_container->get('passwords.manager')->hash($data['new_password']);
 
-				$sql = 'SELECT group_id
-					FROM ' . GROUPS_TABLE . "
-					WHERE group_name = 'REGISTERED'
-						AND group_type = " . GROUP_SPECIAL;
-				$result = $this->db->sql_query($sql);
-				$group_id = $this->db->sql_fetchfield('group_id');
-				$this->db->sql_freeresult($result);
+				$account = $this->create_account($data, $cp_data, [
+					'group'				=> $data['group'],
+					'group_default'		=> !empty($group_default),
+					'new_user'			=> !empty($new_user),
+					'admin_activate'	=> $admin_activate,
+					'use_queue'			=> false,
+				]);
 
-				// Use group_id here
-				if (!$group_id)
-				{
-					trigger_error('NO_GROUP');
-				}
-
-				if (($this->config['require_activation'] == USER_ACTIVATION_SELF || $this->config['require_activation'] == USER_ACTIVATION_ADMIN) && $this->config['email_enable'] && !$admin_activate)
-				{
-					$this->user_actkey = gen_rand_string(mt_rand(6, 10));
-					$this->user_type = USER_INACTIVE;
-					$this->user_inactive_reason = INACTIVE_REGISTER;
-					$this->user_inactive_time = time();
-				}
-				else
-				{
-					$this->user_type = USER_NORMAL;
-					$this->user_actkey = '';
-					$this->user_inactive_reason = 0;
-					$this->user_inactive_time = 0;
-				}
-
-				// Instantiate passwords manager
-				$passwords_manager = $phpbb_container->get('passwords.manager');
-
-				$this->user_row = [
-					'username'				=> $data['username'],
-					'user_password'			=> $passwords_manager->hash($data['new_password']),
-					'user_email'			=> $data['email'],
-					'group_id'				=> (int) $group_id,
-					'user_timezone'			=> $data['tz'],
-					'user_lang'				=> $data['lang'],
-					'user_type'				=> $this->user_type,
-					'user_actkey'			=> $this->user_actkey,
-					'user_ip'				=> $this->user->ip,
-					'user_regdate'			=> time(),
-					'user_inactive_reason'	=> $this->user_inactive_reason,
-					'user_inactive_time'	=> $this->user_inactive_time,
-				];
-
-				if ($this->config['allow_birthdays'])
-				{
-					$this->user_row['user_birthday'] = $data['user_birthday'];
-				}
-
-				if ($this->config['new_member_post_limit'] && $new_user)
-				{
-					$this->user_row['user_new'] = 1;
-				}
-
-				// Register user
-				$this->user_id = user_add($this->user_row, $cp_data);
-
-				if (!empty($data['group']))
-				{
-					if (!empty($group_default))
-					{
-						group_user_add($data['group'], [$this->user_id], false, false, true);
-					}
-					else
-					{
-						group_user_add($data['group'], [$this->user_id]);
-					}
-				}
-
-				$this->log->add('admin', $this->user->data['user_id'], $this->user->ip, 'LOG_USER_ADDED', time(), [$data['username']]);
-
-				// This should not happen because the required variables are listed above
-				if ($this->user_id === false)
-				{
-					trigger_error($this->user->lang['NO_USER'], E_USER_ERROR);
-				}
-
-				// Send a message to the user if needed
-				$message = [];
-				$send_reset_link = true;
-
-				if ($this->config['require_activation'] == USER_ACTIVATION_SELF && $this->config['email_enable'])
-				{
-					$message[] = $this->user->lang['ACP_ACCOUNT_INACTIVE'];
-					$email_template = '@phpbbmodders_adduser/user_added_inactive';
-					// Activating the account clears reset_token (ucp_activate), and the reset
-					// form refuses inactive users, so a link could never be used here. The
-					// email tells the user to use "Forgot password" once activated instead.
-					$send_reset_link = false;
-				}
-				else if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->config['email_enable'] && !$admin_activate)
-				{
-					$message[] = $this->user->lang['ACP_ACCOUNT_INACTIVE_ADMIN'];
-					$email_template = '@phpbbmodders_adduser/user_added_admin_welcome_inactive';
-				}
-				else
-				{
-					$message[] = $this->user->lang['ACP_ACCOUNT_ADDED'];
-					$email_template = '@phpbbmodders_adduser/user_added_welcome';
-				}
-
-				if ($this->config['email_enable'])
-				{
-					$email_vars = [
-						'WELCOME_MSG'		=> htmlspecialchars_decode(sprintf($this->user->lang['WELCOME_SUBJECT'], $this->config['sitename'])),
-						'USERNAME'			=> htmlspecialchars_decode($data['username']),
-
-						'U_ACTIVATE'		=> "$server_url/ucp.$phpEx?mode=activate&u=$this->user_id&k=$this->user_actkey",
-					];
-
-					if ($send_reset_link)
-					{
-						// Send a reset link instead of the password: the user picks their own.
-						// route() ends in append_sid(), which would attach the session id of the
-						// admin creating the account. That must not travel by email.
-						$reset_expires = \phpbb\user::get_token_expiration();
-						$reset_token = strtolower(gen_rand_string(32));
-						$this->db->sql_query('UPDATE ' . USERS_TABLE . "
-							SET reset_token = '" . $this->db->sql_escape($reset_token) . "',
-								reset_token_expiration = " . (int) $reset_expires . '
-							WHERE user_id = ' . (int) $this->user_id);
-						global $_SID;
-						$sid_backup = $_SID;
-						$_SID = '';
-						$reset_link = generate_board_url(true) . $phpbb_container->get('controller.helper')->route(
-							'phpbb_ucp_reset_password_controller',
-							['u' => (int) $this->user_id, 'token' => $reset_token],
-							false
-						);
-						$_SID = $sid_backup;
-
-						$email_vars['U_RESET_PASSWORD'] = $reset_link;
-						$email_vars['RESET_EXPIRES'] = $this->user->format_date($reset_expires, str_replace('|', '', $this->user->lang['DATETIME_FORMAT']));
-					}
-
-					$this->send_email($email_template, $data['lang'], $data['email'], $data['username'], $email_vars);
-				}
-
-				if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && !$admin_activate)
-				{
-					$phpbb_notifications = $phpbb_container->get('notification_manager');
-					$phpbb_notifications->add_notifications('notification.type.admin_activate_user', [
-						'user_id'		=> $this->user_id,
-						'user_actkey'	=> $this->user_row['user_actkey'],
-						'user_regdate'	=> $this->user_row['user_regdate'],
-					]);
-				}
-
-				$message[] = sprintf($this->user->lang['CONTINUE_EDIT_USER'], '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=overview&amp;u=' . $this->user_id) . '">', $data['username'], '</a>');
-				$message[] = sprintf($this->user->lang['EDIT_USER_GROUPS'], '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=groups&amp;u=' . $this->user_id) . '">', '</a>');
+				$message = [$this->language->lang($account['message'])];
+				$message[] = sprintf($this->language->lang('ADDUSER_CONTINUE_EDIT_USER'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=overview&amp;u=' . $account['user_id']) . '">', $data['username'], '</a>');
+				$message[] = sprintf($this->language->lang('ADDUSER_EDIT_USER_GROUPS'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=groups&amp;u=' . $account['user_id']) . '">', '</a>');
 				$message[] = adm_back_link($this->u_action);
 
 				trigger_error(implode('<br>', $message));
 			}
-		}
-
-		$l_reg_cond = '';
-
-		switch ($this->config['require_activation'])
-		{
-			case USER_ACTIVATION_SELF:
-				$l_reg_cond = $this->user->lang['ACP_EMAIL_ACTIVATE'];
-			break;
-
-			case USER_ACTIVATION_ADMIN:
-				$l_reg_cond = $this->user->lang['ACP_ADMIN_ACTIVATE'];
-			break;
-
-			default:
-				$l_reg_cond = $this->user->lang['ACP_INSTANT_ACTIVATE'];
-			break;
 		}
 
 		if ($this->config['allow_birthdays'])
@@ -394,9 +248,6 @@ class adduser_module
 			]);
 		}
 
-		// Get the groups so that the user can be added to them
-		$s_group_options = $this->get_groups($group_selected);
-
 		// phpBB 4.0 returns the timezone and language options as arrays for the
 		// template to render; phpBB 3.3 fills template blocks and returns HTML
 		if (function_exists('phpbb_language_select'))
@@ -426,13 +277,13 @@ class adduser_module
 			'PASSWORD'			=> $data['new_password'],
 			'PASSWORD_CONFIRM'	=> $data['password_confirm'],
 
-			'L_PASSWORD_EXPLAIN'	=> $this->user->lang($this->config['pass_complex'] . '_EXPLAIN', $this->user->lang('CHARACTERS', (int) $this->config['min_pass_chars']), $this->user->lang('CHARACTERS', (int) $this->config['max_pass_chars'])) . ' ' . $this->user->lang['PASSWORD_EXPLAIN'],
-			'L_USERNAME_EXPLAIN'	=> $this->user->lang($this->config['allow_name_chars'] . '_EXPLAIN', $this->user->lang('CHARACTERS', (int) $this->config['min_name_chars']), $this->user->lang('CHARACTERS', (int) $this->config['max_name_chars'])),
-			'L_ADD_USER_EXPLAIN'	=> sprintf($this->user->lang['ADD_USER_EXPLAIN'], '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=acp_board&amp;mode=registration') . '">', '</a>'),
-			'L_REG_COND'			=> $l_reg_cond,
+			'L_PASSWORD_EXPLAIN'	=> $this->language->lang($this->config['pass_complex'] . '_EXPLAIN', $this->language->lang('CHARACTERS', (int) $this->config['min_pass_chars']), $this->language->lang('CHARACTERS', (int) $this->config['max_pass_chars'])) . ' ' . $this->language->lang('ADDUSER_PASSWORD_EXPLAIN'),
+			'L_USERNAME_EXPLAIN'	=> $this->language->lang($this->config['allow_name_chars'] . '_EXPLAIN', $this->language->lang('CHARACTERS', (int) $this->config['min_name_chars']), $this->language->lang('CHARACTERS', (int) $this->config['max_name_chars'])),
+			'L_ADD_USER_EXPLAIN'	=> sprintf($this->language->lang('ADDUSER_ADD_USER_EXPLAIN'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=acp_board&amp;mode=registration') . '">', '</a>'),
+			'L_REG_COND'			=> $this->get_registration_condition(),
 
 			'S_USER_ADD'		=> true,
-			'S_GROUP_OPTIONS'	=> $s_group_options,
+			'S_GROUP_OPTIONS'	=> $this->get_groups($group_selected),
 			'S_LANG_OPTIONS'	=> $s_lang_options,
 			'S_ADMIN_ACTIVATE'	=> ($this->config['require_activation'] == USER_ACTIVATION_ADMIN) ? true : false,
 			'S_NEW_USER_SET'	=> !empty($this->config['new_member_post_limit']) ? true : false,
@@ -448,6 +299,735 @@ class adduser_module
 		$cp->generate_profile_fields('profile', $this->user->get_iso_lang_id());
 	}
 
+	/**
+	 * The "Add users from CSV" page: upload, then check the rows, then create
+	 * the accounts and show what happened.
+	 *
+	 * The checked rows travel from the check step to the create step in a
+	 * hidden field, with passwords already hashed and an HMAC over the whole
+	 * payload, so what gets created is exactly what the admin saw.
+	 *
+	 * @return void
+	 */
+	protected function csv_page()
+	{
+		$this->tpl_name = 'acp_adduser_csv';
+		$this->page_title = $this->language->lang('ACP_ADDUSER_CSV');
+
+		add_form_key('acp_adduser_csv');
+
+		$options = [
+			'group'				=> $this->request->variable('group', 0),
+			'group_default'		=> (bool) $this->request->variable('group_default', 0),
+			'new_user'			=> $this->config['new_member_post_limit'] && $this->request->variable('new_user', 0),
+			'admin_activate'	=> $this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->request->variable('activate', 0),
+			'use_queue'			=> true,
+		];
+		$error = [];
+
+		if ($this->request->is_set_post('create'))
+		{
+			if (!check_form_key('acp_adduser_csv'))
+			{
+				trigger_error($this->language->lang('FORM_INVALID') . adm_back_link($this->u_action), E_USER_WARNING);
+			}
+
+			$payload = $this->decode_csv_payload($this->request->variable('csv_data', ''), $this->request->variable('csv_hash', ''));
+
+			if ($payload === null)
+			{
+				trigger_error($this->language->lang('ADDUSER_CSV_DATA_INVALID') . adm_back_link($this->u_action), E_USER_WARNING);
+			}
+
+			$this->csv_create($payload);
+			return;
+		}
+
+		if ($this->request->is_set_post('preview'))
+		{
+			if (!check_form_key('acp_adduser_csv'))
+			{
+				trigger_error($this->language->lang('FORM_INVALID') . adm_back_link($this->u_action), E_USER_WARNING);
+			}
+
+			if ($options['group'] && !isset($this->get_allowed_groups()[$options['group']]))
+			{
+				$error[] = $this->language->lang('ADDUSER_GROUP_NOT_ALLOWED');
+			}
+
+			$contents = $this->read_csv_upload($error);
+
+			if ($contents !== null && !count($error))
+			{
+				$reader = new \phpbbmodders\adduser\csv_reader();
+				$parsed = $reader->parse($contents, self::CSV_MAX_ROWS);
+
+				if ($parsed['error'] === null)
+				{
+					$this->csv_preview($parsed, $options);
+					return;
+				}
+
+				// The column name in CSV_UNKNOWN_COLUMN comes straight from the file
+				$error[] = $this->language->lang(...array_map(function ($argument) {
+					return is_string($argument) ? utf8_htmlspecialchars($argument) : $argument;
+				}, $parsed['error']));
+			}
+		}
+
+		$this->template->assign_vars([
+			'ERROR'				=> implode('<br>', $error),
+			'L_CSV_FILE_EXPLAIN'	=> $this->language->lang('ADDUSER_CSV_FILE_EXPLAIN', self::CSV_MAX_ROWS, get_formatted_filesize(self::CSV_MAX_BYTES)),
+			'L_REG_COND'		=> $this->get_registration_condition(),
+
+			'S_STEP_UPLOAD'		=> true,
+			// Lets the footer script hide "default group" while no group is chosen
+			'S_USER_ADD'		=> true,
+			'S_GROUP_OPTIONS'	=> $this->get_groups($options['group']),
+			'S_ADMIN_ACTIVATE'	=> $this->config['require_activation'] == USER_ACTIVATION_ADMIN,
+			'S_NEW_USER_SET'	=> !empty($this->config['new_member_post_limit']),
+			'S_NEW_USER_ENABLE'	=> $options['new_user'],
+			'S_GROUP_DEFAULT'	=> $options['group_default'],
+			'S_ACTIVATE'		=> $options['admin_activate'],
+
+			'U_ACTION'			=> $this->u_action,
+		]);
+	}
+
+	/**
+	 * Read the uploaded CSV file.
+	 *
+	 * @param array $error Receives a localised message when the upload is unusable
+	 * @return string|null File contents, or null on error
+	 */
+	protected function read_csv_upload(array &$error)
+	{
+		$file = $this->request->file('csv_file');
+		$upload_error = isset($file['error']) ? (int) $file['error'] : UPLOAD_ERR_NO_FILE;
+
+		if ($upload_error === UPLOAD_ERR_NO_FILE || empty($file['tmp_name']) || empty($file['size']))
+		{
+			$error[] = $this->language->lang('ADDUSER_CSV_NO_FILE');
+			return null;
+		}
+
+		if ($upload_error === UPLOAD_ERR_INI_SIZE || $upload_error === UPLOAD_ERR_FORM_SIZE || $file['size'] > self::CSV_MAX_BYTES)
+		{
+			$error[] = $this->language->lang('ADDUSER_CSV_TOO_LARGE', get_formatted_filesize(self::CSV_MAX_BYTES));
+			return null;
+		}
+
+		if ($upload_error !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name']))
+		{
+			$error[] = $this->language->lang('ADDUSER_CSV_UPLOAD_FAILED');
+			return null;
+		}
+
+		$contents = file_get_contents($file['tmp_name']);
+
+		if ($contents === false)
+		{
+			$error[] = $this->language->lang('ADDUSER_CSV_UPLOAD_FAILED');
+			return null;
+		}
+
+		return $contents;
+	}
+
+	/**
+	 * Check every row of a parsed CSV file and show the check page.
+	 *
+	 * @param array $parsed  csv_reader::parse() result without a file-level error
+	 * @param array $options Options chosen on the upload page
+	 * @return void
+	 */
+	protected function csv_preview(array $parsed, array $options)
+	{
+		// Hashing a password with phpBB's default algorithm takes up to a second
+		// on slow servers, so a full file can need more than the usual time limit
+		if (function_exists('set_time_limit'))
+		{
+			set_time_limit(0);
+		}
+
+		$passwords_manager = $this->phpbb_container->get('passwords.manager');
+		$type_cast = new \phpbb\request\type_cast_helper();
+		$seen_usernames = $seen_emails = [];
+		$ready = $skipped = [];
+
+		foreach ($parsed['rows'] as $row)
+		{
+			$values = $row['values'];
+
+			// Escape and normalise the values exactly as request::variable() does on
+			// the single form, so both pages store accounts the same way
+			$type_cast->set_var($username, $values['username'], 'string', true);
+			$type_cast->set_var($email, $values['email'], 'string', false);
+			$type_cast->set_var($password, $values['password'], 'string', true);
+			$type_cast->set_var($lang, $values['lang'], 'string', false);
+			$type_cast->set_var($birthday, $values['birthday'], 'string', false);
+
+			$data = [
+				'username'		=> $username,
+				'email'			=> strtolower($email),
+				'new_password'	=> $password,
+				'lang'			=> ($lang === '') ? basename($this->config['default_lang']) : basename($lang),
+				'tz'			=> $this->config['board_timezone'],
+			];
+
+			$errors = [];
+
+			if ($row['error'] !== null)
+			{
+				$errors[] = $this->language->lang(...$row['error']);
+			}
+
+			$password_generated = ($data['new_password'] === '');
+
+			if ($password_generated)
+			{
+				$data['new_password'] = $this->generate_password();
+			}
+
+			$errors = array_merge($errors, $this->validate_csv_account($data, $birthday, true));
+
+			$username_clean = utf8_clean_string($data['username']);
+
+			if ($username_clean !== '' && isset($seen_usernames[$username_clean]))
+			{
+				$errors[] = $this->language->lang('ADDUSER_CSV_DUPLICATE_USERNAME', $seen_usernames[$username_clean]);
+			}
+			else if ($username_clean !== '')
+			{
+				$seen_usernames[$username_clean] = $row['row'];
+			}
+
+			if (!$this->config['allow_emailreuse'] && $data['email'] !== '')
+			{
+				if (isset($seen_emails[$data['email']]))
+				{
+					$errors[] = $this->language->lang('ADDUSER_CSV_DUPLICATE_EMAIL', $seen_emails[$data['email']]);
+				}
+				else
+				{
+					$seen_emails[$data['email']] = $row['row'];
+				}
+			}
+
+			$this->template->assign_block_vars('csv_rows', [
+				'ROW'			=> $row['row'],
+				'USERNAME'		=> $data['username'],
+				'EMAIL'			=> $data['email'],
+				'LANG'			=> $data['lang'],
+				'BIRTHDAY'		=> $this->config['allow_birthdays'] ? $birthday : '',
+				'PASSWORD'		=> $this->language->lang($password_generated ? 'ADDUSER_CSV_PASSWORD_GENERATED' : 'ADDUSER_CSV_PASSWORD_GIVEN'),
+				'ERRORS'		=> implode('<br>', $errors),
+			]);
+
+			if (count($errors))
+			{
+				$skipped[] = ['row' => $row['row'], 'username' => $data['username'], 'errors' => $errors];
+				continue;
+			}
+
+			$ready[] = [
+				'row'			=> $row['row'],
+				'username'		=> $data['username'],
+				'email'			=> $data['email'],
+				'lang'			=> $data['lang'],
+				'birthday'		=> $this->config['allow_birthdays'] ? $birthday : '',
+				'password_hash'	=> $passwords_manager->hash($data['new_password']),
+			];
+		}
+
+		$payload = $this->encode_csv_payload(['options' => $options, 'ready' => $ready, 'skipped' => $skipped]);
+
+		$this->template->assign_vars([
+			'L_CSV_CREATE'			=> $this->language->lang('ADDUSER_CSV_CREATE_ACCOUNTS', count($ready)),
+			'L_CSV_PREVIEW_COUNTS'	=> $this->language->lang('ADDUSER_CSV_READY_COUNT', count($ready)) . ' ' . $this->language->lang('ADDUSER_CSV_SKIPPED_COUNT', count($skipped)),
+			'L_REG_COND'			=> $this->get_registration_condition(),
+
+			'S_STEP_PREVIEW'		=> true,
+			'S_BIRTHDAYS_ENABLED'	=> (bool) $this->config['allow_birthdays'],
+			'S_BIRTHDAYS_IGNORED'	=> !$this->config['allow_birthdays'] && in_array('birthday', $parsed['columns'], true),
+			'S_CAN_CREATE'			=> count($ready) > 0,
+
+			'CSV_DATA'				=> $payload['data'],
+			'CSV_HASH'				=> $payload['hash'],
+
+			'U_ACTION'				=> $this->u_action,
+		]);
+	}
+
+	/**
+	 * Create the accounts of a checked CSV file and show the summary page.
+	 *
+	 * Every row is checked again first: a username or email address may have
+	 * been taken since the check page was shown.
+	 *
+	 * @param array $payload Decoded payload from the check page
+	 * @return void
+	 */
+	protected function csv_create(array $payload)
+	{
+		// Creating and emailing a full file can take longer than the usual time limit
+		if (function_exists('set_time_limit'))
+		{
+			set_time_limit(0);
+		}
+
+		$options = [
+			'group'				=> (int) $payload['options']['group'],
+			'group_default'		=> !empty($payload['options']['group_default']),
+			'new_user'			=> !empty($payload['options']['new_user']),
+			'admin_activate'	=> !empty($payload['options']['admin_activate']),
+			'use_queue'			=> true,
+		];
+
+		// Check again: the group may have been deleted since the check page
+		if ($options['group'] && !isset($this->get_allowed_groups()[$options['group']]))
+		{
+			trigger_error($this->language->lang('ADDUSER_GROUP_NOT_ALLOWED') . adm_back_link($this->u_action), E_USER_WARNING);
+		}
+
+		$created = 0;
+		$skipped = $payload['skipped'];
+
+		foreach ($payload['ready'] as $row)
+		{
+			$data = [
+				'username'		=> $row['username'],
+				'email'			=> $row['email'],
+				'lang'			=> $row['lang'],
+				'tz'			=> $this->config['board_timezone'],
+				'password_hash'	=> $row['password_hash'],
+			];
+
+			$errors = $this->validate_csv_account($data, $row['birthday'], false);
+
+			if (count($errors))
+			{
+				$skipped[] = ['row' => $row['row'], 'username' => $row['username'], 'errors' => $errors];
+				continue;
+			}
+
+			$account = $this->create_account($data, [], $options);
+			$created++;
+
+			$this->template->assign_block_vars('csv_created', [
+				'ROW'		=> $row['row'],
+				'USERNAME'	=> $row['username'],
+				'EMAIL'		=> $row['email'],
+				'U_USER'	=> append_sid("{$this->phpbb_admin_path}index.{$this->php_ext}", 'i=users&amp;mode=overview&amp;u=' . $account['user_id']),
+			]);
+		}
+
+		usort($skipped, function ($a, $b) {
+			return $a['row'] <=> $b['row'];
+		});
+
+		foreach ($skipped as $row)
+		{
+			$this->template->assign_block_vars('csv_skipped', [
+				'ROW'		=> $row['row'],
+				'USERNAME'	=> $row['username'],
+				'ERRORS'	=> implode('<br>', $row['errors']),
+			]);
+		}
+
+		$this->template->assign_vars([
+			'L_CSV_SUMMARY_COUNTS'	=> $this->language->lang('ADDUSER_CSV_CREATED_COUNT', $created) . ' ' . $this->language->lang('ADDUSER_CSV_SKIPPED_COUNT', count($skipped)),
+			'L_REG_COND'			=> $this->get_registration_condition(),
+
+			'S_STEP_SUMMARY'		=> true,
+
+			'U_ACTION'				=> $this->u_action,
+		]);
+	}
+
+	/**
+	 * Check one CSV account with the rules of the single form.
+	 *
+	 * @param array  $data           username, email, lang, tz and, when $check_password is true, new_password;
+	 *                               user_birthday is added when birthdays are enabled and one is given
+	 * @param string $birthday       Birthday as written in the file (DD-MM-YYYY), or ''
+	 * @param bool   $check_password Whether to check new_password against the password rules
+	 * @return string[] Localised errors, empty when the account can be created
+	 */
+	protected function validate_csv_account(array &$data, $birthday, $check_password)
+	{
+		$errors = [];
+		$validate_array = $this->get_validate_array();
+
+		if (!$check_password)
+		{
+			unset($validate_array['new_password']);
+		}
+
+		unset($validate_array['bday_day'], $validate_array['bday_month'], $validate_array['bday_year'], $validate_array['user_birthday']);
+
+		if ($this->config['allow_birthdays'] && $birthday !== '')
+		{
+			if (preg_match('/^(\d{1,2})-(\d{1,2})-(\d{4})$/', $birthday, $match))
+			{
+				$data['bday_day'] = (int) $match[1];
+				$data['bday_month'] = (int) $match[2];
+				$data['bday_year'] = (int) $match[3];
+				$data['user_birthday'] = sprintf('%2d-%2d-%4d', $data['bday_day'], $data['bday_month'], $data['bday_year']);
+
+				$validate_array = array_merge($validate_array, $this->get_birthday_validate_array());
+			}
+			else
+			{
+				$errors[] = $this->language->lang('ADDUSER_CSV_BIRTHDAY_FORMAT');
+			}
+		}
+
+		$validation_errors = validate_data($data, $validate_array);
+		$errors = array_merge($errors, array_map([$this->language, 'lang'], $validation_errors));
+
+		// language_iso_name above checks the language is installed; the
+		// extension also needs its email templates in that language
+		if (!in_array('WRONG_DATA_LANG', $validation_errors, true) && !$this->extension_has_language($data['lang']))
+		{
+			$errors[] = $this->language->lang('ADDUSER_CSV_LANG_NOT_AVAILABLE', $data['lang']);
+		}
+
+		return array_values(array_unique($errors));
+	}
+
+	/**
+	 * Pack the checked rows for the hidden field of the check page.
+	 *
+	 * @param array $payload Options, ready rows and skipped rows
+	 * @return array ['data' => string, 'hash' => string]
+	 */
+	protected function encode_csv_payload(array $payload)
+	{
+		$data = base64_encode(json_encode($payload));
+
+		return ['data' => $data, 'hash' => hash_hmac('sha256', $data, $this->get_csv_payload_key())];
+	}
+
+	/**
+	 * Unpack the hidden field of the check page.
+	 *
+	 * @param string $data Base64-encoded JSON payload
+	 * @param string $hash HMAC of $data
+	 * @return array|null Payload, or null when it was changed or is malformed
+	 */
+	protected function decode_csv_payload($data, $hash)
+	{
+		if ($data === '' || !hash_equals(hash_hmac('sha256', $data, $this->get_csv_payload_key()), $hash))
+		{
+			return null;
+		}
+
+		$payload = json_decode((string) base64_decode($data, true), true);
+
+		if (!is_array($payload) || !isset($payload['options'], $payload['ready'], $payload['skipped']) || !is_array($payload['ready']) || !is_array($payload['skipped']))
+		{
+			return null;
+		}
+
+		return $payload;
+	}
+
+	/**
+	 * Key for the HMAC over the checked rows: secret to the board and to the
+	 * admin who uploaded the file.
+	 *
+	 * @return string
+	 */
+	protected function get_csv_payload_key()
+	{
+		return 'phpbbmodders_adduser_csv' . $this->config['avatar_salt'] . $this->user->data['user_form_salt'] . $this->user->data['user_id'];
+	}
+
+	/**
+	 * Create one account, add it to the chosen group, log it and email the user.
+	 *
+	 * @param array $data    username, email, lang, tz, password_hash and, with birthdays enabled, optionally user_birthday
+	 * @param array $cp_data Custom profile field values
+	 * @param array $options group (int, 0 for none), group_default, new_user, admin_activate and use_queue (all bool)
+	 * @return array ['user_id' => int, 'message' => language key describing what the user was sent]
+	 */
+	protected function create_account(array $data, array $cp_data, array $options)
+	{
+		$admin_activate = $options['admin_activate'];
+		$server_url = generate_board_url();
+
+		$group_id = $this->get_registered_group_id();
+
+		// Use group_id here
+		if (!$group_id)
+		{
+			trigger_error('NO_GROUP');
+		}
+
+		if (($this->config['require_activation'] == USER_ACTIVATION_SELF || $this->config['require_activation'] == USER_ACTIVATION_ADMIN) && $this->config['email_enable'] && !$admin_activate)
+		{
+			$user_actkey = gen_rand_string(mt_rand(6, 10));
+			$user_type = USER_INACTIVE;
+			$user_inactive_reason = INACTIVE_REGISTER;
+			$user_inactive_time = time();
+		}
+		else
+		{
+			$user_type = USER_NORMAL;
+			$user_actkey = '';
+			$user_inactive_reason = 0;
+			$user_inactive_time = 0;
+		}
+
+		$user_row = [
+			'username'				=> $data['username'],
+			'user_password'			=> $data['password_hash'],
+			'user_email'			=> $data['email'],
+			'group_id'				=> (int) $group_id,
+			'user_timezone'			=> $data['tz'],
+			'user_lang'				=> $data['lang'],
+			'user_type'				=> $user_type,
+			'user_actkey'			=> $user_actkey,
+			'user_ip'				=> $this->user->ip,
+			'user_regdate'			=> time(),
+			'user_inactive_reason'	=> $user_inactive_reason,
+			'user_inactive_time'	=> $user_inactive_time,
+		];
+
+		if ($this->config['allow_birthdays'] && isset($data['user_birthday']))
+		{
+			$user_row['user_birthday'] = $data['user_birthday'];
+		}
+
+		if ($this->config['new_member_post_limit'] && $options['new_user'])
+		{
+			$user_row['user_new'] = 1;
+		}
+
+		// Register user
+		$user_id = user_add($user_row, $cp_data);
+
+		// This should not happen because the required variables are listed above
+		if ($user_id === false)
+		{
+			trigger_error($this->language->lang('NO_USER'), E_USER_ERROR);
+		}
+
+		if (!empty($options['group']))
+		{
+			if (!empty($options['group_default']))
+			{
+				group_user_add($options['group'], [$user_id], false, false, true);
+			}
+			else
+			{
+				group_user_add($options['group'], [$user_id]);
+			}
+		}
+
+		$this->log->add('admin', $this->user->data['user_id'], $this->user->ip, 'LOG_USER_ADDED', time(), [$data['username']]);
+
+		// Send a message to the user if needed
+		$send_reset_link = true;
+
+		if ($this->config['require_activation'] == USER_ACTIVATION_SELF && $this->config['email_enable'])
+		{
+			$message = 'ACP_ADDUSER_ACCOUNT_INACTIVE';
+			$email_template = '@phpbbmodders_adduser/user_added_inactive';
+			// Activating the account clears reset_token (ucp_activate), and the reset
+			// form refuses inactive users, so a link could never be used here. The
+			// email tells the user to use "Forgot password" once activated instead.
+			$send_reset_link = false;
+		}
+		else if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->config['email_enable'] && !$admin_activate)
+		{
+			$message = 'ACP_ADDUSER_ACCOUNT_INACTIVE_ADMIN';
+			$email_template = '@phpbbmodders_adduser/user_added_admin_welcome_inactive';
+		}
+		else
+		{
+			$message = 'ACP_ADDUSER_ACCOUNT_ADDED';
+			$email_template = '@phpbbmodders_adduser/user_added_welcome';
+		}
+
+		if ($this->config['email_enable'])
+		{
+			$email_vars = [
+				'WELCOME_MSG'		=> htmlspecialchars_decode(sprintf($this->language->lang('WELCOME_SUBJECT'), $this->config['sitename'])),
+				'USERNAME'			=> htmlspecialchars_decode($data['username']),
+
+				'U_ACTIVATE'		=> "$server_url/ucp.{$this->php_ext}?mode=activate&u=$user_id&k=$user_actkey",
+			];
+
+			if ($send_reset_link)
+			{
+				// Send a reset link instead of the password: the user picks their own.
+				// route() ends in append_sid(), which would attach the session id of the
+				// admin creating the account. That must not travel by email.
+				$reset_expires = \phpbb\user::get_token_expiration();
+				$reset_token = strtolower(gen_rand_string(32));
+				$this->db->sql_query('UPDATE ' . USERS_TABLE . '
+					SET ' . $this->db->sql_build_array('UPDATE', [
+						'reset_token'				=> $reset_token,
+						'reset_token_expiration'	=> (int) $reset_expires,
+					]) . '
+					WHERE user_id = ' . (int) $user_id);
+				global $_SID;
+				$sid_backup = $_SID;
+				$_SID = '';
+				$reset_link = generate_board_url(true) . $this->phpbb_container->get('controller.helper')->route(
+					'phpbb_ucp_reset_password_controller',
+					['u' => (int) $user_id, 'token' => $reset_token],
+					false
+				);
+				$_SID = $sid_backup;
+
+				$email_vars['U_RESET_PASSWORD'] = $reset_link;
+				$email_vars['RESET_EXPIRES'] = $this->user->format_date($reset_expires, str_replace('|', '', $this->language->lang('DATETIME_FORMAT')));
+			}
+
+			$this->send_email($email_template, $data['lang'], $data['email'], $data['username'], $email_vars, $options['use_queue']);
+		}
+
+		if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && !$admin_activate)
+		{
+			$phpbb_notifications = $this->phpbb_container->get('notification_manager');
+			$phpbb_notifications->add_notifications('notification.type.admin_activate_user', [
+				'user_id'		=> $user_id,
+				'user_actkey'	=> $user_row['user_actkey'],
+				'user_regdate'	=> $user_row['user_regdate'],
+			]);
+		}
+
+		return ['user_id' => (int) $user_id, 'message' => $message];
+	}
+
+	/**
+	 * Id of the Registered users group, looked up once per request: the CSV
+	 * page creates many accounts in one go.
+	 *
+	 * @return int 0 when the group is missing
+	 */
+	protected function get_registered_group_id()
+	{
+		if ($this->registered_group_id === null)
+		{
+			$sql = 'SELECT group_id
+				FROM ' . GROUPS_TABLE . "
+				WHERE group_name = 'REGISTERED'
+					AND group_type = " . GROUP_SPECIAL;
+			$result = $this->db->sql_query($sql, 3600);
+			$this->registered_group_id = (int) $this->db->sql_fetchfield('group_id');
+			$this->db->sql_freeresult($result);
+		}
+
+		return $this->registered_group_id;
+	}
+
+	/**
+	 * Make a random password that meets the board's password rules.
+	 *
+	 * The password is never emailed, the user sets their own via the reset
+	 * link. Draw it from random_int rather than from the current time, and
+	 * take one character from every class validate_password() demands.
+	 *
+	 * @return string
+	 */
+	protected function generate_password()
+	{
+		$pools = ['abcdefghijkmnopqrstuvwxyz', 'ABCDEFGHJKLMNPQRSTUVWXYZ', '23456789'];
+		if (!in_array($this->config['pass_complex'], ['PASS_TYPE_ANY', 'PASS_TYPE_CASE', 'PASS_TYPE_ALPHA'], true))
+		{
+			// PASS_TYPE_SYMBOL, or an invalid setting, which phpBB treats as the strictest one
+			$pools[] = '{}[];:,./<>?_+~!@#';
+		}
+		$all = implode('', $pools);
+		$length = max(20, (int) $this->config['min_pass_chars']);
+		$new_password = '';
+		foreach ($pools as $pool)
+		{
+			$new_password .= $pool[random_int(0, strlen($pool) - 1)];
+		}
+		for ($i = strlen($new_password); $i < $length; $i++)
+		{
+			$new_password .= $all[random_int(0, strlen($all) - 1)];
+		}
+		// str_shuffle() draws from the Mersenne Twister, so shuffle by hand
+		for ($i = strlen($new_password) - 1; $i > 0; $i--)
+		{
+			$j = random_int(0, $i);
+			$swap = $new_password[$i];
+			$new_password[$i] = $new_password[$j];
+			$new_password[$j] = $swap;
+		}
+
+		return $new_password;
+	}
+
+	/**
+	 * validate_data() rules shared by the single form and the CSV page.
+	 *
+	 * @return array
+	 */
+	protected function get_validate_array()
+	{
+		$validate_array = [
+			'username'			=> [
+				['string', false, $this->config['min_name_chars'], $this->config['max_name_chars']],
+				['username', '']],
+			'email'				=> [
+				['string', false, 6, 60],
+				['user_email']],
+			'new_password'		=> [
+				['string', false, $this->config['min_pass_chars'], $this->config['max_pass_chars']],
+				['password']],
+			'tz'				=> ['timezone'],
+			'lang'				=> ['language_iso_name'],
+		];
+
+		if ($this->config['allow_birthdays'])
+		{
+			$validate_array = array_merge($validate_array, $this->get_birthday_validate_array());
+		}
+
+		return $validate_array;
+	}
+
+	/**
+	 * validate_data() rules for a birthday.
+	 *
+	 * @return array
+	 */
+	protected function get_birthday_validate_array()
+	{
+		return [
+			'bday_day'		=> ['num', true, 1, 31],
+			'bday_month'	=> ['num', true, 1, 12],
+			'bday_year'		=> ['num', true, 1901, gmdate('Y', time()) + 50],
+			'user_birthday'	=> ['date', true],
+		];
+	}
+
+	/**
+	 * Explanation of what the board's activation setting means for a new account.
+	 *
+	 * @return string
+	 */
+	protected function get_registration_condition()
+	{
+		switch ($this->config['require_activation'])
+		{
+			case USER_ACTIVATION_SELF:
+				return $this->language->lang('ACP_ADDUSER_EMAIL_ACTIVATE');
+
+			case USER_ACTIVATION_ADMIN:
+				return $this->language->lang('ACP_ADDUSER_ADMIN_ACTIVATE');
+
+			default:
+				return $this->language->lang('ACP_ADDUSER_INSTANT_ACTIVATE');
+		}
+	}
 
 	/**
 	 * Send one email to a new user.
@@ -460,30 +1040,30 @@ class adduser_module
 	 * @param string $address       Recipient email address
 	 * @param string $name          Recipient name
 	 * @param array  $vars          Template variables
+	 * @param bool   $use_queue     Whether to put the email in the board's queue instead of sending it now
 	 * @return void
 	 */
-	private function send_email($template_name, $lang, $address, $name, array $vars)
+	private function send_email($template_name, $lang, $address, $name, array $vars, $use_queue = false)
 	{
-		global $phpbb_container, $phpbb_root_path, $phpEx;
-
-		if ($phpbb_container->has('messenger.method.email'))
+		if ($this->phpbb_container->has('messenger.method.email'))
 		{
-			$email = $phpbb_container->get('messenger.method.email');
-			$email->set_use_queue(false);
+			$email = $this->phpbb_container->get('messenger.method.email');
+			$email->set_use_queue($use_queue);
 			$email->template($template_name, $lang);
 			$email->to($address, $name);
 			$email->anti_abuse_headers($this->config, $this->user);
 			$email->assign_vars($vars);
 			$email->send();
+			$email->save_queue();
 			return;
 		}
 
 		if (!class_exists('messenger'))
 		{
-			include($phpbb_root_path . 'includes/functions_messenger.' . $phpEx);
+			include($this->phpbb_root_path . 'includes/functions_messenger.' . $this->php_ext);
 		}
 
-		$messenger = new \messenger(false);
+		$messenger = new \messenger($use_queue);
 		$messenger->template($template_name, $lang);
 		$messenger->to($address, $name);
 		$messenger->headers('X-AntiAbuse: Board servername - ' . $this->config['server_name']);
@@ -492,10 +1072,16 @@ class adduser_module
 		$messenger->headers('X-AntiAbuse: User IP - ' . $this->user->ip);
 		$messenger->assign_vars($vars);
 		$messenger->send(NOTIFY_EMAIL);
+		$messenger->save_queue();
 	}
 
-	// Function to return groups that are allowed
-	private function get_groups($group_selected)
+	/**
+	 * Groups a new account may be added to: all but the special groups phpBB
+	 * manages itself, and the COPPA group only while COPPA is enabled.
+	 *
+	 * @return array Group rows keyed by group_id
+	 */
+	protected function get_allowed_groups()
 	{
 		$ignore_groups = ['BOTS', 'GUESTS', 'REGISTERED', 'NEWLY_REGISTERED'];
 
@@ -505,7 +1091,7 @@ class adduser_module
 			ORDER BY group_name ASC';
 		$result = $this->db->sql_query($sql);
 
-		$s_group_options = '<select id="group" name="group"><option value="0">' . $this->user->lang['NO_GROUP'] . '</option>';
+		$groups = [];
 
 		while ($row = $this->db->sql_fetchrow($result))
 		{
@@ -514,14 +1100,43 @@ class adduser_module
 				continue;
 			}
 
-			$selected = $row['group_id'] == $group_selected ? ' selected="selected"' : '';
-			$s_group_options .= '<option' . (($row['group_type'] == GROUP_SPECIAL) ? ' class="sep"' : '') . ' value="' . $row['group_id'] . '"' . $selected . '>' . (($row['group_type'] == GROUP_SPECIAL) ? $this->user->lang['G_' . $row['group_name']] : $row['group_name']) . '</option>';
+			$groups[(int) $row['group_id']] = $row;
 		}
-
-		$s_group_options .='</select>';
 		$this->db->sql_freeresult($result);
 
+		return $groups;
+	}
+
+	/**
+	 * Build the group selector.
+	 *
+	 * @param int $group_selected Group to preselect, 0 for none
+	 * @return string HTML select element
+	 */
+	private function get_groups($group_selected)
+	{
+		$s_group_options = '<select id="group" name="group"><option value="0">' . $this->language->lang('NO_GROUP') . '</option>';
+
+		foreach ($this->get_allowed_groups() as $row)
+		{
+			$selected = $row['group_id'] == $group_selected ? ' selected="selected"' : '';
+			$s_group_options .= '<option' . (($row['group_type'] == GROUP_SPECIAL) ? ' class="sep"' : '') . ' value="' . $row['group_id'] . '"' . $selected . '>' . (($row['group_type'] == GROUP_SPECIAL) ? $this->language->lang('G_' . $row['group_name']) : $row['group_name']) . '</option>';
+		}
+
+		$s_group_options .= '</select>';
+
 		return $s_group_options;
+	}
+
+	/**
+	 * Whether the extension has language files, and so email templates, for a language.
+	 *
+	 * @param string $lang Language directory name, e.g. en
+	 * @return bool
+	 */
+	protected function extension_has_language($lang)
+	{
+		return in_array($lang, $this->dir_to_array($this->phpbb_root_path . 'ext/phpbbmodders/adduser/language'), true);
 	}
 
 	/**
@@ -532,7 +1147,7 @@ class adduser_module
 		$directories = glob($directory . '/*', GLOB_ONLYDIR);
 		$dir_array = [];
 
-		foreach ($directories as $key => $value)
+		foreach ($directories as $value)
 		{
 			$dir_array[] = substr(strrchr($value, '/'), 1);
 		}

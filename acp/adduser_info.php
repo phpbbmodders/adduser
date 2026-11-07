@@ -19,10 +19,15 @@ class adduser_info
 	{
 		return [
 			'filename'	=> '\phpbbmodders\adduser\acp\adduser_module',
-			'title'		=> 'ADD_USER',
+			'title'		=> 'ADDUSER_ADD_USER',
 			'modes'		=> [
 				'main'	=> [
 					'title'	=> 'ACP_ADD_USER',
+					'auth'	=> 'ext_phpbbmodders/adduser && acl_a_user',
+					'cat'	=> ['ACP_CAT_USERS'],
+				],
+				'csv'	=> [
+					'title'	=> 'ACP_ADDUSER_CSV',
 					'auth'	=> 'ext_phpbbmodders/adduser && acl_a_user',
 					'cat'	=> ['ACP_CAT_USERS'],
 				],
