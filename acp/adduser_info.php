@@ -26,6 +26,11 @@ class adduser_info
 					'auth'	=> 'ext_phpbbmodders/adduser && acl_a_user',
 					'cat'	=> ['ACP_CAT_USERS'],
 				],
+				'csv'	=> [
+					'title'	=> 'ACP_ADD_USERS_CSV',
+					'auth'	=> 'ext_phpbbmodders/adduser && acl_a_user',
+					'cat'	=> ['ACP_CAT_USERS'],
+				],
 			],
 		];
 	}

@@ -10,6 +10,7 @@ Lets administrators create user accounts from the ACP.
 - Set username, email, password (left blank, a random one is generated and never emailed), language and birthday.
 - Choose the user's group and optionally make it their default group; optionally add them to *Newly registered users*.
 - Follows the board's activation setting: the new user gets an email with a link to set their own password, or with admin activation you can activate the account on the spot. With user activation, the email has the activation link instead, and the user sets their password with *Forgot password* after activating.
+- **Add users from CSV** page: upload a CSV file of up to 50 users (username and email, optionally password, language and birthday). Every row is checked with the same rules as the single form and shown with its errors before anything is created; rows with errors are skipped, and a summary lists what was created and skipped. The group and activation options apply to every row. A spreadsheet can be saved as "CSV UTF-8" from Excel or LibreOffice first.
 - Every account created is recorded in the admin log.
 
 ## Requirements
@@ -22,7 +23,7 @@ Lets administrators create user accounts from the ACP.
 1. Copy the extension to `/ext/phpbbmodders/adduser`
 2. In the Administration Control Panel, go to **Customise → Manage extensions**
 3. Enable the **Add User** extension
-4. Add users under **ACP → Users and Groups → Add User**
+4. Add users under **ACP → Users and Groups → Add User**, or many at once under **ACP → Users and Groups → Add users from CSV**
 
 ## TODO
 
