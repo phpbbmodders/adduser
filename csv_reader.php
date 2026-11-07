@@ -56,13 +56,13 @@ class csv_reader
 
 		if (trim($contents) === '')
 		{
-			$result['error'] = ['CSV_EMPTY'];
+			$result['error'] = ['ADDUSER_CSV_EMPTY'];
 			return $result;
 		}
 
 		if (!preg_match('//u', $contents))
 		{
-			$result['error'] = ['CSV_NOT_UTF8'];
+			$result['error'] = ['ADDUSER_CSV_NOT_UTF8'];
 			return $result;
 		}
 
@@ -93,14 +93,14 @@ class csv_reader
 			if (!in_array($name, self::COLUMNS, true))
 			{
 				fclose($handle);
-				$result['error'] = ['CSV_UNKNOWN_COLUMN', $name, implode(', ', self::COLUMNS)];
+				$result['error'] = ['ADDUSER_CSV_UNKNOWN_COLUMN', $name, implode(', ', self::COLUMNS)];
 				return $result;
 			}
 
 			if (in_array($name, $columns, true))
 			{
 				fclose($handle);
-				$result['error'] = ['CSV_DUPLICATE_COLUMN', $name];
+				$result['error'] = ['ADDUSER_CSV_DUPLICATE_COLUMN', $name];
 				return $result;
 			}
 
@@ -113,7 +113,7 @@ class csv_reader
 			if (!in_array($name, $columns, true))
 			{
 				fclose($handle);
-				$result['error'] = ['CSV_MISSING_COLUMN', $name];
+				$result['error'] = ['ADDUSER_CSV_MISSING_COLUMN', $name];
 				return $result;
 			}
 		}
@@ -135,7 +135,7 @@ class csv_reader
 			if (count($result['rows']) >= $max_rows)
 			{
 				fclose($handle);
-				$result['error'] = ['CSV_TOO_MANY_ROWS', $max_rows];
+				$result['error'] = ['ADDUSER_CSV_TOO_MANY_ROWS', $max_rows];
 				$result['rows'] = [];
 				return $result;
 			}
@@ -151,7 +151,7 @@ class csv_reader
 				}
 				else if ($value !== '')
 				{
-					$error = ['CSV_TOO_MANY_FIELDS', count($columns)];
+					$error = ['ADDUSER_CSV_TOO_MANY_FIELDS', count($columns)];
 				}
 			}
 
@@ -162,7 +162,7 @@ class csv_reader
 
 		if (!count($result['rows']))
 		{
-			$result['error'] = ['CSV_NO_ROWS'];
+			$result['error'] = ['ADDUSER_CSV_NO_ROWS'];
 		}
 
 		return $result;

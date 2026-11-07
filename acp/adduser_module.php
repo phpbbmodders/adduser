@@ -63,6 +63,12 @@ class adduser_module
 	/** @var string */
 	protected $php_ext;
 
+	/** @var \phpbb\language\language */
+	protected $language;
+
+	/** @var int|null Cached by get_registered_group_id() */
+	protected $registered_group_id;
+
 	public function main($id, $mode)
 	{
 		global $config, $db, $request, $template, $user, $phpbb_root_path, $phpEx, $phpbb_container, $phpbb_admin_path;
@@ -73,6 +79,7 @@ class adduser_module
 		$this->request = $request;
 		$this->template = $template;
 		$this->user = $user;
+		$this->language = $phpbb_container->get('language');
 		$this->phpbb_container = $phpbb_container;
 		$this->phpbb_root_path = $phpbb_root_path;
 		$this->phpbb_admin_path = $phpbb_admin_path;
@@ -85,7 +92,7 @@ class adduser_module
 		}
 
 		// Include lang files
-		$this->user->add_lang(['posting', 'ucp', 'acp/users', 'acp/groups']);
+		$this->language->add_lang(['posting', 'ucp', 'acp/users', 'acp/groups']);
 
 		if ($mode === 'csv')
 		{
@@ -98,7 +105,7 @@ class adduser_module
 		$group_selected = $request->variable('group', 0);
 		$new_user = $request->variable('new_user', 0);
 
-		$this->page_title = $this->user->lang['ACP_ADD_USER'];
+		$this->page_title = $this->language->lang('ACP_ADD_USER');
 
 		// Load a template from adm/style for our ACP page
 		$this->tpl_name = 'acp_adduser';
@@ -112,7 +119,7 @@ class adduser_module
 		// Define the name of the form for use as a form key
 		add_form_key('acp_adduser');
 
-		// Try to automatically determine the timezone and daylight savings time settings
+		// New accounts start out in the board's timezone
 		$timezone = $this->config['board_timezone'];
 
 		$data = [
@@ -129,7 +136,7 @@ class adduser_module
 		// errors will present themselves due to no email template found.
 		if (!$this->extension_has_language($data['lang']))
 		{
-			trigger_error(sprintf($this->user->lang['DIR_NOT_EXIST'], $data['lang'], $data['lang']), E_USER_WARNING);
+			trigger_error(sprintf($this->language->lang('ADDUSER_DIR_NOT_EXIST'), $data['lang'], $data['lang']), E_USER_WARNING);
 		}
 
 		if ($this->config['allow_birthdays'])
@@ -151,7 +158,7 @@ class adduser_module
 				trigger_error('FORM_INVALID');
 			}
 
-			// Create a new password for our user only if there is nothing  for a password already
+			// Create a new password for our user only if there is nothing for a password already
 			if (empty($data['new_password']) && empty($data['password_confirm']))
 			{
 				$data['new_password'] = $data['password_confirm'] = $this->generate_password();
@@ -168,17 +175,17 @@ class adduser_module
 
 			if ($data['new_password'] != $data['password_confirm'])
 			{
-				$error[] = $this->user->lang['NEW_PASSWORD_ERROR'];
+				$error[] = $this->language->lang('NEW_PASSWORD_ERROR');
 			}
 
 			// Only the groups offered in the selector may be posted
 			if ($data['group'] && !isset($this->get_allowed_groups()[$data['group']]))
 			{
-				$error[] = 'GROUP_NOT_ALLOWED';
+				$error[] = 'ADDUSER_GROUP_NOT_ALLOWED';
 			}
 
 			// Replace "error" strings with their real, localised form
-			$error = array_map([$this->user, 'lang'], $error);
+			$error = array_map([$this->language, 'lang'], $error);
 
 			if (!count($error))
 			{
@@ -192,9 +199,9 @@ class adduser_module
 					'use_queue'			=> false,
 				]);
 
-				$message = [$this->user->lang[$account['message']]];
-				$message[] = sprintf($this->user->lang['CONTINUE_EDIT_USER'], '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=overview&amp;u=' . $account['user_id']) . '">', $data['username'], '</a>');
-				$message[] = sprintf($this->user->lang['EDIT_USER_GROUPS'], '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=groups&amp;u=' . $account['user_id']) . '">', '</a>');
+				$message = [$this->language->lang($account['message'])];
+				$message[] = sprintf($this->language->lang('ADDUSER_CONTINUE_EDIT_USER'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=overview&amp;u=' . $account['user_id']) . '">', $data['username'], '</a>');
+				$message[] = sprintf($this->language->lang('ADDUSER_EDIT_USER_GROUPS'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=groups&amp;u=' . $account['user_id']) . '">', '</a>');
 				$message[] = adm_back_link($this->u_action);
 
 				trigger_error(implode('<br>', $message));
@@ -270,9 +277,9 @@ class adduser_module
 			'PASSWORD'			=> $data['new_password'],
 			'PASSWORD_CONFIRM'	=> $data['password_confirm'],
 
-			'L_PASSWORD_EXPLAIN'	=> $this->user->lang($this->config['pass_complex'] . '_EXPLAIN', $this->user->lang('CHARACTERS', (int) $this->config['min_pass_chars']), $this->user->lang('CHARACTERS', (int) $this->config['max_pass_chars'])) . ' ' . $this->user->lang['PASSWORD_EXPLAIN'],
-			'L_USERNAME_EXPLAIN'	=> $this->user->lang($this->config['allow_name_chars'] . '_EXPLAIN', $this->user->lang('CHARACTERS', (int) $this->config['min_name_chars']), $this->user->lang('CHARACTERS', (int) $this->config['max_name_chars'])),
-			'L_ADD_USER_EXPLAIN'	=> sprintf($this->user->lang['ADD_USER_EXPLAIN'], '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=acp_board&amp;mode=registration') . '">', '</a>'),
+			'L_PASSWORD_EXPLAIN'	=> $this->language->lang($this->config['pass_complex'] . '_EXPLAIN', $this->language->lang('CHARACTERS', (int) $this->config['min_pass_chars']), $this->language->lang('CHARACTERS', (int) $this->config['max_pass_chars'])) . ' ' . $this->language->lang('ADDUSER_PASSWORD_EXPLAIN'),
+			'L_USERNAME_EXPLAIN'	=> $this->language->lang($this->config['allow_name_chars'] . '_EXPLAIN', $this->language->lang('CHARACTERS', (int) $this->config['min_name_chars']), $this->language->lang('CHARACTERS', (int) $this->config['max_name_chars'])),
+			'L_ADD_USER_EXPLAIN'	=> sprintf($this->language->lang('ADDUSER_ADD_USER_EXPLAIN'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=acp_board&amp;mode=registration') . '">', '</a>'),
 			'L_REG_COND'			=> $this->get_registration_condition(),
 
 			'S_USER_ADD'		=> true,
@@ -305,7 +312,7 @@ class adduser_module
 	protected function csv_page()
 	{
 		$this->tpl_name = 'acp_adduser_csv';
-		$this->page_title = $this->user->lang['ACP_ADD_USERS_CSV'];
+		$this->page_title = $this->language->lang('ACP_ADDUSER_CSV');
 
 		add_form_key('acp_adduser_csv');
 
@@ -322,14 +329,14 @@ class adduser_module
 		{
 			if (!check_form_key('acp_adduser_csv'))
 			{
-				trigger_error($this->user->lang['FORM_INVALID'] . adm_back_link($this->u_action), E_USER_WARNING);
+				trigger_error($this->language->lang('FORM_INVALID') . adm_back_link($this->u_action), E_USER_WARNING);
 			}
 
 			$payload = $this->decode_csv_payload($this->request->variable('csv_data', ''), $this->request->variable('csv_hash', ''));
 
 			if ($payload === null)
 			{
-				trigger_error($this->user->lang['CSV_DATA_INVALID'] . adm_back_link($this->u_action), E_USER_WARNING);
+				trigger_error($this->language->lang('ADDUSER_CSV_DATA_INVALID') . adm_back_link($this->u_action), E_USER_WARNING);
 			}
 
 			$this->csv_create($payload);
@@ -340,12 +347,12 @@ class adduser_module
 		{
 			if (!check_form_key('acp_adduser_csv'))
 			{
-				trigger_error($this->user->lang['FORM_INVALID'] . adm_back_link($this->u_action), E_USER_WARNING);
+				trigger_error($this->language->lang('FORM_INVALID') . adm_back_link($this->u_action), E_USER_WARNING);
 			}
 
 			if ($options['group'] && !isset($this->get_allowed_groups()[$options['group']]))
 			{
-				$error[] = $this->user->lang['GROUP_NOT_ALLOWED'];
+				$error[] = $this->language->lang('ADDUSER_GROUP_NOT_ALLOWED');
 			}
 
 			$contents = $this->read_csv_upload($error);
@@ -362,7 +369,7 @@ class adduser_module
 				}
 
 				// The column name in CSV_UNKNOWN_COLUMN comes straight from the file
-				$error[] = $this->user->lang(...array_map(function ($argument) {
+				$error[] = $this->language->lang(...array_map(function ($argument) {
 					return is_string($argument) ? htmlspecialchars($argument, ENT_COMPAT, 'UTF-8') : $argument;
 				}, $parsed['error']));
 			}
@@ -370,7 +377,7 @@ class adduser_module
 
 		$this->template->assign_vars([
 			'ERROR'				=> implode('<br>', $error),
-			'L_CSV_FILE_EXPLAIN'	=> $this->user->lang('CSV_FILE_EXPLAIN', self::CSV_MAX_ROWS, get_formatted_filesize(self::CSV_MAX_BYTES)),
+			'L_CSV_FILE_EXPLAIN'	=> $this->language->lang('ADDUSER_CSV_FILE_EXPLAIN', self::CSV_MAX_ROWS, get_formatted_filesize(self::CSV_MAX_BYTES)),
 			'L_REG_COND'		=> $this->get_registration_condition(),
 
 			'S_STEP_UPLOAD'		=> true,
@@ -400,19 +407,19 @@ class adduser_module
 
 		if ($upload_error === UPLOAD_ERR_NO_FILE || empty($file['tmp_name']) || empty($file['size']))
 		{
-			$error[] = $this->user->lang['CSV_NO_FILE'];
+			$error[] = $this->language->lang('ADDUSER_CSV_NO_FILE');
 			return null;
 		}
 
 		if ($upload_error === UPLOAD_ERR_INI_SIZE || $upload_error === UPLOAD_ERR_FORM_SIZE || $file['size'] > self::CSV_MAX_BYTES)
 		{
-			$error[] = $this->user->lang('CSV_TOO_LARGE', get_formatted_filesize(self::CSV_MAX_BYTES));
+			$error[] = $this->language->lang('ADDUSER_CSV_TOO_LARGE', get_formatted_filesize(self::CSV_MAX_BYTES));
 			return null;
 		}
 
 		if ($upload_error !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name']))
 		{
-			$error[] = $this->user->lang['CSV_UPLOAD_FAILED'];
+			$error[] = $this->language->lang('ADDUSER_CSV_UPLOAD_FAILED');
 			return null;
 		}
 
@@ -420,7 +427,7 @@ class adduser_module
 
 		if ($contents === false)
 		{
-			$error[] = $this->user->lang['CSV_UPLOAD_FAILED'];
+			$error[] = $this->language->lang('ADDUSER_CSV_UPLOAD_FAILED');
 			return null;
 		}
 
@@ -438,7 +445,10 @@ class adduser_module
 	{
 		// Hashing a password with phpBB's default algorithm takes up to a second
 		// on slow servers, so a full file can need more than the usual time limit
-		@set_time_limit(0);
+		if (function_exists('set_time_limit'))
+		{
+			set_time_limit(0);
+		}
 
 		$passwords_manager = $this->phpbb_container->get('passwords.manager');
 		$type_cast = new \phpbb\request\type_cast_helper();
@@ -469,7 +479,7 @@ class adduser_module
 
 			if ($row['error'] !== null)
 			{
-				$errors[] = $this->user->lang(...$row['error']);
+				$errors[] = $this->language->lang(...$row['error']);
 			}
 
 			$password_generated = ($data['new_password'] === '');
@@ -485,7 +495,7 @@ class adduser_module
 
 			if ($username_clean !== '' && isset($seen_usernames[$username_clean]))
 			{
-				$errors[] = $this->user->lang('CSV_DUPLICATE_USERNAME', $seen_usernames[$username_clean]);
+				$errors[] = $this->language->lang('ADDUSER_CSV_DUPLICATE_USERNAME', $seen_usernames[$username_clean]);
 			}
 			else if ($username_clean !== '')
 			{
@@ -496,7 +506,7 @@ class adduser_module
 			{
 				if (isset($seen_emails[$data['email']]))
 				{
-					$errors[] = $this->user->lang('CSV_DUPLICATE_EMAIL', $seen_emails[$data['email']]);
+					$errors[] = $this->language->lang('ADDUSER_CSV_DUPLICATE_EMAIL', $seen_emails[$data['email']]);
 				}
 				else
 				{
@@ -510,7 +520,7 @@ class adduser_module
 				'EMAIL'			=> $data['email'],
 				'LANG'			=> $data['lang'],
 				'BIRTHDAY'		=> $this->config['allow_birthdays'] ? $birthday : '',
-				'PASSWORD'		=> $this->user->lang($password_generated ? 'CSV_PASSWORD_GENERATED' : 'CSV_PASSWORD_GIVEN'),
+				'PASSWORD'		=> $this->language->lang($password_generated ? 'ADDUSER_CSV_PASSWORD_GENERATED' : 'ADDUSER_CSV_PASSWORD_GIVEN'),
 				'ERRORS'		=> implode('<br>', $errors),
 			]);
 
@@ -533,8 +543,8 @@ class adduser_module
 		$payload = $this->encode_csv_payload(['options' => $options, 'ready' => $ready, 'skipped' => $skipped]);
 
 		$this->template->assign_vars([
-			'L_CSV_CREATE'			=> $this->user->lang('CSV_CREATE_ACCOUNTS', count($ready)),
-			'L_CSV_PREVIEW_COUNTS'	=> $this->user->lang('CSV_READY_COUNT', count($ready)) . ' ' . $this->user->lang('CSV_SKIPPED_COUNT', count($skipped)),
+			'L_CSV_CREATE'			=> $this->language->lang('ADDUSER_CSV_CREATE_ACCOUNTS', count($ready)),
+			'L_CSV_PREVIEW_COUNTS'	=> $this->language->lang('ADDUSER_CSV_READY_COUNT', count($ready)) . ' ' . $this->language->lang('ADDUSER_CSV_SKIPPED_COUNT', count($skipped)),
 			'L_REG_COND'			=> $this->get_registration_condition(),
 
 			'S_STEP_PREVIEW'		=> true,
@@ -561,7 +571,10 @@ class adduser_module
 	protected function csv_create(array $payload)
 	{
 		// Creating and emailing a full file can take longer than the usual time limit
-		@set_time_limit(0);
+		if (function_exists('set_time_limit'))
+		{
+			set_time_limit(0);
+		}
 
 		$options = [
 			'group'				=> (int) $payload['options']['group'],
@@ -574,7 +587,7 @@ class adduser_module
 		// Check again: the group may have been deleted since the check page
 		if ($options['group'] && !isset($this->get_allowed_groups()[$options['group']]))
 		{
-			trigger_error($this->user->lang['GROUP_NOT_ALLOWED'] . adm_back_link($this->u_action), E_USER_WARNING);
+			trigger_error($this->language->lang('ADDUSER_GROUP_NOT_ALLOWED') . adm_back_link($this->u_action), E_USER_WARNING);
 		}
 
 		$created = 0;
@@ -623,7 +636,7 @@ class adduser_module
 		}
 
 		$this->template->assign_vars([
-			'L_CSV_SUMMARY_COUNTS'	=> $this->user->lang('CSV_CREATED_COUNT', $created) . ' ' . $this->user->lang('CSV_SKIPPED_COUNT', count($skipped)),
+			'L_CSV_SUMMARY_COUNTS'	=> $this->language->lang('ADDUSER_CSV_CREATED_COUNT', $created) . ' ' . $this->language->lang('ADDUSER_CSV_SKIPPED_COUNT', count($skipped)),
 			'L_REG_COND'			=> $this->get_registration_condition(),
 
 			'S_STEP_SUMMARY'		=> true,
@@ -666,18 +679,18 @@ class adduser_module
 			}
 			else
 			{
-				$errors[] = $this->user->lang['CSV_BIRTHDAY_FORMAT'];
+				$errors[] = $this->language->lang('ADDUSER_CSV_BIRTHDAY_FORMAT');
 			}
 		}
 
 		$validation_errors = validate_data($data, $validate_array);
-		$errors = array_merge($errors, array_map([$this->user, 'lang'], $validation_errors));
+		$errors = array_merge($errors, array_map([$this->language, 'lang'], $validation_errors));
 
 		// language_iso_name above checks the language is installed; the
 		// extension also needs its email templates in that language
 		if (!in_array('WRONG_DATA_LANG', $validation_errors, true) && !$this->extension_has_language($data['lang']))
 		{
-			$errors[] = $this->user->lang('CSV_LANG_NOT_AVAILABLE', $data['lang']);
+			$errors[] = $this->language->lang('ADDUSER_CSV_LANG_NOT_AVAILABLE', $data['lang']);
 		}
 
 		return array_values(array_unique($errors));
@@ -744,13 +757,7 @@ class adduser_module
 		$admin_activate = $options['admin_activate'];
 		$server_url = generate_board_url();
 
-		$sql = 'SELECT group_id
-			FROM ' . GROUPS_TABLE . "
-			WHERE group_name = 'REGISTERED'
-				AND group_type = " . GROUP_SPECIAL;
-		$result = $this->db->sql_query($sql);
-		$group_id = $this->db->sql_fetchfield('group_id');
-		$this->db->sql_freeresult($result);
+		$group_id = $this->get_registered_group_id();
 
 		// Use group_id here
 		if (!$group_id)
@@ -804,7 +811,7 @@ class adduser_module
 		// This should not happen because the required variables are listed above
 		if ($user_id === false)
 		{
-			trigger_error($this->user->lang['NO_USER'], E_USER_ERROR);
+			trigger_error($this->language->lang('NO_USER'), E_USER_ERROR);
 		}
 
 		if (!empty($options['group']))
@@ -826,7 +833,7 @@ class adduser_module
 
 		if ($this->config['require_activation'] == USER_ACTIVATION_SELF && $this->config['email_enable'])
 		{
-			$message = 'ACP_ACCOUNT_INACTIVE';
+			$message = 'ACP_ADDUSER_ACCOUNT_INACTIVE';
 			$email_template = '@phpbbmodders_adduser/user_added_inactive';
 			// Activating the account clears reset_token (ucp_activate), and the reset
 			// form refuses inactive users, so a link could never be used here. The
@@ -835,19 +842,19 @@ class adduser_module
 		}
 		else if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->config['email_enable'] && !$admin_activate)
 		{
-			$message = 'ACP_ACCOUNT_INACTIVE_ADMIN';
+			$message = 'ACP_ADDUSER_ACCOUNT_INACTIVE_ADMIN';
 			$email_template = '@phpbbmodders_adduser/user_added_admin_welcome_inactive';
 		}
 		else
 		{
-			$message = 'ACP_ACCOUNT_ADDED';
+			$message = 'ACP_ADDUSER_ACCOUNT_ADDED';
 			$email_template = '@phpbbmodders_adduser/user_added_welcome';
 		}
 
 		if ($this->config['email_enable'])
 		{
 			$email_vars = [
-				'WELCOME_MSG'		=> htmlspecialchars_decode(sprintf($this->user->lang['WELCOME_SUBJECT'], $this->config['sitename'])),
+				'WELCOME_MSG'		=> htmlspecialchars_decode(sprintf($this->language->lang('WELCOME_SUBJECT'), $this->config['sitename'])),
 				'USERNAME'			=> htmlspecialchars_decode($data['username']),
 
 				'U_ACTIVATE'		=> "$server_url/ucp.{$this->php_ext}?mode=activate&u=$user_id&k=$user_actkey",
@@ -860,9 +867,11 @@ class adduser_module
 				// admin creating the account. That must not travel by email.
 				$reset_expires = \phpbb\user::get_token_expiration();
 				$reset_token = strtolower(gen_rand_string(32));
-				$this->db->sql_query('UPDATE ' . USERS_TABLE . "
-					SET reset_token = '" . $this->db->sql_escape($reset_token) . "',
-						reset_token_expiration = " . (int) $reset_expires . '
+				$this->db->sql_query('UPDATE ' . USERS_TABLE . '
+					SET ' . $this->db->sql_build_array('UPDATE', [
+						'reset_token'				=> $reset_token,
+						'reset_token_expiration'	=> (int) $reset_expires,
+					]) . '
 					WHERE user_id = ' . (int) $user_id);
 				global $_SID;
 				$sid_backup = $_SID;
@@ -875,7 +884,7 @@ class adduser_module
 				$_SID = $sid_backup;
 
 				$email_vars['U_RESET_PASSWORD'] = $reset_link;
-				$email_vars['RESET_EXPIRES'] = $this->user->format_date($reset_expires, str_replace('|', '', $this->user->lang['DATETIME_FORMAT']));
+				$email_vars['RESET_EXPIRES'] = $this->user->format_date($reset_expires, str_replace('|', '', $this->language->lang('DATETIME_FORMAT')));
 			}
 
 			$this->send_email($email_template, $data['lang'], $data['email'], $data['username'], $email_vars, $options['use_queue']);
@@ -892,6 +901,28 @@ class adduser_module
 		}
 
 		return ['user_id' => (int) $user_id, 'message' => $message];
+	}
+
+	/**
+	 * Id of the Registered users group, looked up once per request: the CSV
+	 * page creates many accounts in one go.
+	 *
+	 * @return int 0 when the group is missing
+	 */
+	protected function get_registered_group_id()
+	{
+		if ($this->registered_group_id === null)
+		{
+			$sql = 'SELECT group_id
+				FROM ' . GROUPS_TABLE . "
+				WHERE group_name = 'REGISTERED'
+					AND group_type = " . GROUP_SPECIAL;
+			$result = $this->db->sql_query($sql, 3600);
+			$this->registered_group_id = (int) $this->db->sql_fetchfield('group_id');
+			$this->db->sql_freeresult($result);
+		}
+
+		return $this->registered_group_id;
 	}
 
 	/**
@@ -988,13 +1019,13 @@ class adduser_module
 		switch ($this->config['require_activation'])
 		{
 			case USER_ACTIVATION_SELF:
-				return $this->user->lang['ACP_EMAIL_ACTIVATE'];
+				return $this->language->lang('ACP_ADDUSER_EMAIL_ACTIVATE');
 
 			case USER_ACTIVATION_ADMIN:
-				return $this->user->lang['ACP_ADMIN_ACTIVATE'];
+				return $this->language->lang('ACP_ADDUSER_ADMIN_ACTIVATE');
 
 			default:
-				return $this->user->lang['ACP_INSTANT_ACTIVATE'];
+				return $this->language->lang('ACP_ADDUSER_INSTANT_ACTIVATE');
 		}
 	}
 
@@ -1084,12 +1115,12 @@ class adduser_module
 	 */
 	private function get_groups($group_selected)
 	{
-		$s_group_options = '<select id="group" name="group"><option value="0">' . $this->user->lang['NO_GROUP'] . '</option>';
+		$s_group_options = '<select id="group" name="group"><option value="0">' . $this->language->lang('NO_GROUP') . '</option>';
 
 		foreach ($this->get_allowed_groups() as $row)
 		{
 			$selected = $row['group_id'] == $group_selected ? ' selected="selected"' : '';
-			$s_group_options .= '<option' . (($row['group_type'] == GROUP_SPECIAL) ? ' class="sep"' : '') . ' value="' . $row['group_id'] . '"' . $selected . '>' . (($row['group_type'] == GROUP_SPECIAL) ? $this->user->lang['G_' . $row['group_name']] : $row['group_name']) . '</option>';
+			$s_group_options .= '<option' . (($row['group_type'] == GROUP_SPECIAL) ? ' class="sep"' : '') . ' value="' . $row['group_id'] . '"' . $selected . '>' . (($row['group_type'] == GROUP_SPECIAL) ? $this->language->lang('G_' . $row['group_name']) : $row['group_name']) . '</option>';
 		}
 
 		$s_group_options .= '</select>';
@@ -1116,7 +1147,7 @@ class adduser_module
 		$directories = glob($directory . '/*', GLOB_ONLYDIR);
 		$dir_array = [];
 
-		foreach ($directories as $key => $value)
+		foreach ($directories as $value)
 		{
 			$dir_array[] = substr(strrchr($value, '/'), 1);
 		}

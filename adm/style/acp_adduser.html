@@ -1,6 +1,6 @@
 {% include 'overall_header.html' %}
 
-<h1>{{ lang('ADD_USER') }}</h1>
+<h1>{{ lang('ADDUSER_ADD_USER') }}</h1>
 <p>{{ L_ADD_USER_EXPLAIN }}</p>
 
 <form id="register" method="post" autocomplete="off" action="{{ U_ACTION }}">
@@ -38,16 +38,16 @@
 		</dl>
 		{% include 'timezone_option.html' %}
 		<dl id="groups">
-			<dt><label for="group">{{ lang('GROUPS') ~ lang('COLON') }}</label><br><span>{{ lang('GROUP_ADD') }}</span></dt>
+			<dt><label for="group">{{ lang('GROUPS') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_GROUP_ADD') }}</span></dt>
 			<dd>{{ S_GROUP_OPTIONS }}</dd>
 		</dl>
 		<dl class="default_group">
-			<dt><label for="group_default">{{ lang('GROUP_DEFAULT') ~ lang('COLON') }}</label><br><span>{{ lang('GROUP_DEFAULT_EXPLAIN') }}</span></dt>
+			<dt><label for="group_default">{{ lang('GROUP_DEFAULT') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_GROUP_DEFAULT_EXPLAIN') }}</span></dt>
 			<dd><input id="group_default" class="radio" type="checkbox" value="1" {{ U_GROUP_DEFAULT }} name="group_default" /></dd>
 		</dl>
 		{% if S_NEW_USER_SET %}
 		<dl>
-			<dt><label for="new_user">{{ lang('ENABLE_NEWUSER') ~ lang('COLON') }}</label><br><span>{{ lang('ENABLE_NEWUSER_EXPLAIN') }}</span></dt>
+			<dt><label for="new_user">{{ lang('ADDUSER_ENABLE_NEWUSER') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_ENABLE_NEWUSER_EXPLAIN') }}</span></dt>
 			<dd>
 				<label><input type="radio" class="radio" name="new_user" value="1"{% if S_NEW_USER_ENABLE %} id="new_user" checked="checked"{% endif %} /> {{ lang('YES') }}</label>
 				<label><input type="radio" class="radio" name="new_user" value="0"{% if not S_NEW_USER_ENABLE %} id="new_user" checked="checked"{% endif %} /> {{ lang('NO') }}</label>
@@ -62,7 +62,7 @@
 		{% endif %}
 		{% if S_ADMIN_ACTIVATE %}
 		<dl>
-			<dt><label for="admin_activate">{{ lang('ADMIN_ACTIVATE') ~ lang('COLON') }}</label></dt>
+			<dt><label for="admin_activate">{{ lang('ADDUSER_ADMIN_ACTIVATE') ~ lang('COLON') }}</label></dt>
 			<dd><input id="admin_activate" class="radio" type="checkbox" value="1" {{ U_ADMIN_ACTIVATE }} name="activate" /></dd>
 		</dl>
 		{% endif %}

@@ -1,7 +1,7 @@
 {% include 'overall_header.html' %}
 
-<h1>{{ lang('ADD_USERS_CSV') }}</h1>
-<p>{{ lang('ADD_USERS_CSV_EXPLAIN') }}</p>
+<h1>{{ lang('ADDUSER_ADD_USERS_CSV') }}</h1>
+<p>{{ lang('ADDUSER_ADD_USERS_CSV_EXPLAIN') }}</p>
 
 {% if ERROR %}
 <div class="errorbox">
@@ -14,27 +14,27 @@
 <form id="adduser_csv" method="post" enctype="multipart/form-data" action="{{ U_ACTION }}">
 
 	<fieldset>
-		<legend>{{ lang('CSV_FILE') }}</legend>
+		<legend>{{ lang('ADDUSER_CSV_FILE') }}</legend>
 		<dl>
-			<dt><label for="csv_file">{{ lang('CSV_FILE') ~ lang('COLON') }}</label><br><span>{{ L_CSV_FILE_EXPLAIN }}</span></dt>
+			<dt><label for="csv_file">{{ lang('ADDUSER_CSV_FILE') ~ lang('COLON') }}</label><br><span>{{ L_CSV_FILE_EXPLAIN }}</span></dt>
 			<dd><input type="file" id="csv_file" name="csv_file" accept=".csv,text/csv" /></dd>
 		</dl>
 	</fieldset>
 
 	<fieldset>
-		<legend>{{ lang('CSV_OPTIONS') }}</legend>
+		<legend>{{ lang('ADDUSER_CSV_OPTIONS') }}</legend>
 		<p>{{ L_REG_COND }}</p>
 		<dl>
-			<dt><label for="group">{{ lang('GROUPS') ~ lang('COLON') }}</label><br><span>{{ lang('GROUP_ADD') }}</span></dt>
+			<dt><label for="group">{{ lang('GROUPS') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_GROUP_ADD') }}</span></dt>
 			<dd>{{ S_GROUP_OPTIONS }}</dd>
 		</dl>
 		<dl class="default_group">
-			<dt><label for="group_default">{{ lang('GROUP_DEFAULT') ~ lang('COLON') }}</label><br><span>{{ lang('GROUP_DEFAULT_EXPLAIN') }}</span></dt>
+			<dt><label for="group_default">{{ lang('GROUP_DEFAULT') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_GROUP_DEFAULT_EXPLAIN') }}</span></dt>
 			<dd><input id="group_default" class="radio" type="checkbox" value="1" name="group_default"{% if S_GROUP_DEFAULT %} checked="checked"{% endif %} /></dd>
 		</dl>
 		{% if S_NEW_USER_SET %}
 		<dl>
-			<dt><label for="new_user">{{ lang('ENABLE_NEWUSER') ~ lang('COLON') }}</label><br><span>{{ lang('ENABLE_NEWUSER_EXPLAIN') }}</span></dt>
+			<dt><label for="new_user">{{ lang('ADDUSER_ENABLE_NEWUSER') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_ENABLE_NEWUSER_EXPLAIN') }}</span></dt>
 			<dd>
 				<label><input type="radio" class="radio" name="new_user" value="1"{% if S_NEW_USER_ENABLE %} id="new_user" checked="checked"{% endif %} /> {{ lang('YES') }}</label>
 				<label><input type="radio" class="radio" name="new_user" value="0"{% if not S_NEW_USER_ENABLE %} id="new_user" checked="checked"{% endif %} /> {{ lang('NO') }}</label>
@@ -43,14 +43,14 @@
 		{% endif %}
 		{% if S_ADMIN_ACTIVATE %}
 		<dl>
-			<dt><label for="admin_activate">{{ lang('ADMIN_ACTIVATE') ~ lang('COLON') }}</label></dt>
+			<dt><label for="admin_activate">{{ lang('ADDUSER_ADMIN_ACTIVATE') ~ lang('COLON') }}</label></dt>
 			<dd><input id="admin_activate" class="radio" type="checkbox" value="1" name="activate"{% if S_ACTIVATE %} checked="checked"{% endif %} /></dd>
 		</dl>
 		{% endif %}
 	</fieldset>
 
 	<fieldset class="quick">
-		<input class="button1" type="submit" name="preview" value="{{ lang('CSV_CHECK_ROWS') }}" />
+		<input class="button1" type="submit" name="preview" value="{{ lang('ADDUSER_CSV_CHECK_ROWS') }}" />
 		{{ S_FORM_TOKEN }}
 	</fieldset>
 
@@ -58,21 +58,21 @@
 {% endif %}
 
 {% if S_STEP_PREVIEW %}
-<h2>{{ lang('CSV_PREVIEW') }}</h2>
-<p>{{ lang('CSV_PREVIEW_EXPLAIN') }} <strong>{{ L_CSV_PREVIEW_COUNTS }}</strong></p>
+<h2>{{ lang('ADDUSER_CSV_PREVIEW') }}</h2>
+<p>{{ lang('ADDUSER_CSV_PREVIEW_EXPLAIN') }} <strong>{{ L_CSV_PREVIEW_COUNTS }}</strong></p>
 <p>{{ L_REG_COND }}</p>
-{% if S_BIRTHDAYS_IGNORED %}<p>{{ lang('CSV_BIRTHDAYS_IGNORED') }}</p>{% endif %}
+{% if S_BIRTHDAYS_IGNORED %}<p>{{ lang('ADDUSER_CSV_BIRTHDAYS_IGNORED') }}</p>{% endif %}
 
 <table class="table1 zebra-table">
 	<thead>
 	<tr>
-		<th scope="col">{{ lang('CSV_ROW') }}</th>
+		<th scope="col">{{ lang('ADDUSER_CSV_ROW') }}</th>
 		<th scope="col">{{ lang('USERNAME') }}</th>
 		<th scope="col">{{ lang('EMAIL_ADDRESS') }}</th>
 		<th scope="col">{{ lang('LANGUAGE') }}</th>
 		{% if S_BIRTHDAYS_ENABLED %}<th scope="col">{{ lang('BIRTHDAY') }}</th>{% endif %}
 		<th scope="col">{{ lang('PASSWORD') }}</th>
-		<th scope="col">{{ lang('CSV_STATUS') }}</th>
+		<th scope="col">{{ lang('ADDUSER_CSV_STATUS') }}</th>
 	</tr>
 	</thead>
 	<tbody>
@@ -84,7 +84,7 @@
 		<td>{{ row.LANG }}</td>
 		{% if S_BIRTHDAYS_ENABLED %}<td>{{ row.BIRTHDAY }}</td>{% endif %}
 		<td>{{ row.PASSWORD }}</td>
-		<td>{% if row.ERRORS %}<span class="error">{{ row.ERRORS }}</span>{% else %}{{ lang('CSV_READY') }}{% endif %}</td>
+		<td>{% if row.ERRORS %}<span class="error">{{ row.ERRORS }}</span>{% else %}{{ lang('ADDUSER_CSV_READY') }}{% endif %}</td>
 	</tr>
 	{% endfor %}
 	</tbody>
@@ -95,23 +95,23 @@
 		<input type="hidden" name="csv_data" value="{{ CSV_DATA }}" />
 		<input type="hidden" name="csv_hash" value="{{ CSV_HASH }}" />
 		{% if S_CAN_CREATE %}<input class="button1" type="submit" name="create" value="{{ L_CSV_CREATE }}" />&nbsp;&nbsp;{% endif %}
-		<a href="{{ U_ACTION }}">{{ lang('CSV_UPLOAD_ANOTHER') }}</a>
+		<a href="{{ U_ACTION }}">{{ lang('ADDUSER_CSV_UPLOAD_ANOTHER') }}</a>
 		{{ S_FORM_TOKEN }}
 	</fieldset>
 </form>
 {% endif %}
 
 {% if S_STEP_SUMMARY %}
-<h2>{{ lang('CSV_SUMMARY') }}</h2>
+<h2>{{ lang('ADDUSER_CSV_SUMMARY') }}</h2>
 <p><strong>{{ L_CSV_SUMMARY_COUNTS }}</strong></p>
 <p>{{ L_REG_COND }}</p>
 
 {% if csv_created %}
-<h3>{{ lang('CSV_CREATED') }}</h3>
+<h3>{{ lang('ADDUSER_CSV_CREATED') }}</h3>
 <table class="table1 zebra-table">
 	<thead>
 	<tr>
-		<th scope="col">{{ lang('CSV_ROW') }}</th>
+		<th scope="col">{{ lang('ADDUSER_CSV_ROW') }}</th>
 		<th scope="col">{{ lang('USERNAME') }}</th>
 		<th scope="col">{{ lang('EMAIL_ADDRESS') }}</th>
 	</tr>
@@ -129,13 +129,13 @@
 {% endif %}
 
 {% if csv_skipped %}
-<h3>{{ lang('CSV_SKIPPED') }}</h3>
+<h3>{{ lang('ADDUSER_CSV_SKIPPED') }}</h3>
 <table class="table1 zebra-table">
 	<thead>
 	<tr>
-		<th scope="col">{{ lang('CSV_ROW') }}</th>
+		<th scope="col">{{ lang('ADDUSER_CSV_ROW') }}</th>
 		<th scope="col">{{ lang('USERNAME') }}</th>
-		<th scope="col">{{ lang('CSV_STATUS') }}</th>
+		<th scope="col">{{ lang('ADDUSER_CSV_STATUS') }}</th>
 	</tr>
 	</thead>
 	<tbody>
@@ -150,7 +150,7 @@
 </table>
 {% endif %}
 
-<p><a href="{{ U_ACTION }}">{{ lang('CSV_UPLOAD_ANOTHER') }}</a></p>
+<p><a href="{{ U_ACTION }}">{{ lang('ADDUSER_CSV_UPLOAD_ANOTHER') }}</a></p>
 {% endif %}
 
 {% include 'overall_footer.html' %}
