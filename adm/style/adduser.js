@@ -1,0 +1,40 @@
+/**
+ * Add User ACP pages: show "the group chosen above" as a default group only
+ * while a group is chosen, and mark the account as a new user when Newly
+ * registered users is chosen as its default group.
+ */
+
+(function($) { // Avoid conflicts with other libraries
+	'use strict';
+
+	$(function() {
+		var selected_option = $('#group').val();
+
+		// "The group chosen above" only makes sense while a group is chosen
+		if (selected_option == false) {
+			$('.default_group').hide();
+		}
+
+		$('#group').change(function() {
+			var group = $(this).val();
+
+			if (group == false) {
+				$('.default_group').fadeOut('fast', function() {
+					if ($('#default_group_group').prop('checked')) {
+						$('#default_group_registered').prop('checked', true);
+					}
+				});
+			}
+			else {
+				$('.default_group').fadeIn('fast');
+			}
+		});
+
+		// Newly registered users as the default group needs a new user
+		$('#default_group_newly_registered').change(function() {
+			if ($(this).prop('checked')) {
+				$('input[name="new_user"][value="1"]').prop('checked', true);
+			}
+		});
+	});
+})(jQuery);

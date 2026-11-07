@@ -51,7 +51,6 @@ $lang = array_merge($lang, [
 	'ADDUSER_ADD_USER'					=> 'Add User',
 	'ADDUSER_ADD_USER_EXPLAIN'			=> 'Create a new user account. If your activation settings are to Admin Activation only, you will have the option to activate the user instantly.',
 	'ADDUSER_ADMIN_ACTIVATE'			=> 'Activate user account',
-	'CONFIRM_PASSWORD'			=> 'Confirm password',
 	'ADDUSER_EDIT_USER_GROUPS'			=> '%sClick here to edit the user groups for this user%s',
 	'ADDUSER_GROUP_ADD'					=> 'Making a selection here will add the user to the group selected as well as to the registered users group.',
 	'ADDUSER_CONTINUE_EDIT_USER'		=> '%1$sClick here to manage %2$s’s profile%3$s',
