@@ -284,28 +284,12 @@ class adduser_module
 
 				if ($this->config['email_enable'])
 				{
-					if (!class_exists('messenger'))
-					{
-						include($phpbb_root_path . 'includes/functions_messenger.' . $phpEx);
-					}
-
-					$messenger = new \messenger(false);
-
-					$messenger->template($email_template, $data['lang']);
-
-					$messenger->to($data['email'], $data['username']);
-
-					$messenger->headers('X-AntiAbuse: Board servername - ' . $this->config['server_name']);
-					$messenger->headers('X-AntiAbuse: User_id - ' . $this->user->data['user_id']);
-					$messenger->headers('X-AntiAbuse: Username - ' . $this->user->data['username']);
-					$messenger->headers('X-AntiAbuse: User IP - ' . $this->user->ip);
-
-					$messenger->assign_vars([
+					$email_vars = [
 						'WELCOME_MSG'		=> htmlspecialchars_decode(sprintf($this->user->lang['WELCOME_SUBJECT'], $this->config['sitename'])),
 						'USERNAME'			=> htmlspecialchars_decode($data['username']),
 
 						'U_ACTIVATE'		=> "$server_url/ucp.$phpEx?mode=activate&u=$this->user_id&k=$this->user_actkey",
-					]);
+					];
 
 					if ($send_reset_link)
 					{
@@ -328,13 +312,11 @@ class adduser_module
 						);
 						$_SID = $sid_backup;
 
-						$messenger->assign_vars([
-							'U_RESET_PASSWORD'	=> $reset_link,
-							'RESET_EXPIRES'		=> $this->user->format_date($reset_expires, str_replace('|', '', $this->user->lang['DATETIME_FORMAT'])),
-						]);
+						$email_vars['U_RESET_PASSWORD'] = $reset_link;
+						$email_vars['RESET_EXPIRES'] = $this->user->format_date($reset_expires, str_replace('|', '', $this->user->lang['DATETIME_FORMAT']));
 					}
 
-					$messenger->send(NOTIFY_EMAIL);
+					$this->send_email($email_template, $data['lang'], $data['email'], $data['username'], $email_vars);
 				}
 
 				if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && !$admin_activate)
@@ -415,7 +397,27 @@ class adduser_module
 		// Get the groups so that the user can be added to them
 		$s_group_options = $this->get_groups($group_selected);
 
-		$timezone_selects = phpbb_timezone_select($template, $this->user, $data['tz'], true);
+		// phpBB 4.0 returns the timezone and language options as arrays for the
+		// template to render; phpBB 3.3 fills template blocks and returns HTML
+		if (function_exists('phpbb_language_select'))
+		{
+			$template->assign_var('TIMEZONE_OPTIONS', [
+				'tag'		=> 'select',
+				'name'		=> 'tz',
+				'options'	=> phpbb_timezone_select($this->user, $data['tz'], true),
+			]);
+
+			$s_lang_options = '';
+			foreach (phpbb_language_select($db, $data['lang']) as $option)
+			{
+				$s_lang_options .= '<option value="' . $option['value'] . '"' . ($option['selected'] ? ' selected="selected"' : '') . '>' . $option['label'] . '</option>';
+			}
+		}
+		else
+		{
+			phpbb_timezone_select($template, $this->user, $data['tz'], true);
+			$s_lang_options = language_select($data['lang']);
+		}
 
 		$template->assign_vars([
 			'ERROR'				=> (count($error)) ? implode('<br>', $error) : '',
@@ -431,7 +433,7 @@ class adduser_module
 
 			'S_USER_ADD'		=> true,
 			'S_GROUP_OPTIONS'	=> $s_group_options,
-			'S_LANG_OPTIONS'	=> language_select($data['lang']),
+			'S_LANG_OPTIONS'	=> $s_lang_options,
 			'S_ADMIN_ACTIVATE'	=> ($this->config['require_activation'] == USER_ACTIVATION_ADMIN) ? true : false,
 			'S_NEW_USER_SET'	=> !empty($this->config['new_member_post_limit']) ? true : false,
 			'S_NEW_USER_ENABLE'	=> $new_user,
@@ -446,6 +448,51 @@ class adduser_module
 		$cp->generate_profile_fields('profile', $this->user->get_iso_lang_id());
 	}
 
+
+	/**
+	 * Send one email to a new user.
+	 *
+	 * phpBB 4.0 replaced the messenger class with the messenger.method.email
+	 * service, so use the service where it exists and the class otherwise.
+	 *
+	 * @param string $template_name Email template, e.g. @phpbbmodders_adduser/user_added_welcome
+	 * @param string $lang          Language of the template
+	 * @param string $address       Recipient email address
+	 * @param string $name          Recipient name
+	 * @param array  $vars          Template variables
+	 * @return void
+	 */
+	private function send_email($template_name, $lang, $address, $name, array $vars)
+	{
+		global $phpbb_container, $phpbb_root_path, $phpEx;
+
+		if ($phpbb_container->has('messenger.method.email'))
+		{
+			$email = $phpbb_container->get('messenger.method.email');
+			$email->set_use_queue(false);
+			$email->template($template_name, $lang);
+			$email->to($address, $name);
+			$email->anti_abuse_headers($this->config, $this->user);
+			$email->assign_vars($vars);
+			$email->send();
+			return;
+		}
+
+		if (!class_exists('messenger'))
+		{
+			include($phpbb_root_path . 'includes/functions_messenger.' . $phpEx);
+		}
+
+		$messenger = new \messenger(false);
+		$messenger->template($template_name, $lang);
+		$messenger->to($address, $name);
+		$messenger->headers('X-AntiAbuse: Board servername - ' . $this->config['server_name']);
+		$messenger->headers('X-AntiAbuse: User_id - ' . $this->user->data['user_id']);
+		$messenger->headers('X-AntiAbuse: Username - ' . $this->user->data['username']);
+		$messenger->headers('X-AntiAbuse: User IP - ' . $this->user->ip);
+		$messenger->assign_vars($vars);
+		$messenger->send(NOTIFY_EMAIL);
+	}
 
 	// Function to return groups that are allowed
 	private function get_groups($group_selected)
