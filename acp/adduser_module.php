@@ -156,20 +156,41 @@ class adduser_module
 			// Test if form key is valid
 			if (!check_form_key('acp_adduser'))
 			{
-				trigger_error('FORM_INVALID');
+				trigger_error($this->language->lang('FORM_INVALID') . adm_back_link($this->u_action), E_USER_WARNING);
 			}
 
-			// Create a new password for our user only if there is nothing for a password already
+			// A blank password is generated and the user sets their own through the
+			// emailed link. Without board email nothing reaches the user, so a
+			// generated password would leave the account unusable.
+			$password_missing = false;
+
 			if (empty($data['new_password']) && empty($data['password_confirm']))
 			{
-				$data['new_password'] = $data['password_confirm'] = $this->generate_password();
+				if ($this->config['email_enable'])
+				{
+					$data['new_password'] = $data['password_confirm'] = $this->generate_password();
+				}
+				else
+				{
+					$password_missing = true;
+				}
 			}
 
 			// Validate entries
 			$validate_array = $this->get_validate_array();
 			$validate_array['password_confirm'] = ['string', false, $this->config['min_pass_chars'], $this->config['max_pass_chars']];
 
+			if ($password_missing)
+			{
+				unset($validate_array['new_password'], $validate_array['password_confirm']);
+			}
+
 			$error = validate_data($data, $validate_array);
+
+			if ($password_missing)
+			{
+				$error[] = 'ADDUSER_PASSWORD_REQUIRED';
+			}
 
 			// Validate custom profile fields
 			$cp->submit_cp_field('profile', $this->user->get_iso_lang_id(), $cp_data, $error);
@@ -224,7 +245,7 @@ class adduser_module
 			for ($i = 1; $i < 32; $i++)
 			{
 				$selected = ($i == $data['bday_day']) ? ' selected="selected"' : '';
-				$s_birthday_day_options .= "<option  value=\"$i\"$selected>$i</option>";
+				$s_birthday_day_options .= "<option value=\"$i\"$selected>$i</option>";
 			}
 
 			$s_birthday_month_options = '<option value="0"' . ((!$data['bday_month']) ? ' selected="selected"' : '') . '>--</option>';
@@ -234,8 +255,6 @@ class adduser_module
 				$selected = ($i == $data['bday_month']) ? ' selected="selected"' : '';
 				$s_birthday_month_options .= "<option value=\"$i\"$selected>$i</option>";
 			}
-
-			$s_birthday_year_options = '';
 
 			$now = getdate();
 
@@ -286,7 +305,7 @@ class adduser_module
 			'PASSWORD'			=> $data['new_password'],
 			'PASSWORD_CONFIRM'	=> $data['password_confirm'],
 
-			'L_PASSWORD_EXPLAIN'	=> $this->language->lang($this->config['pass_complex'] . '_EXPLAIN', $this->language->lang('CHARACTERS', (int) $this->config['min_pass_chars']), $this->language->lang('CHARACTERS', (int) $this->config['max_pass_chars'])) . ' ' . $this->language->lang('ADDUSER_PASSWORD_EXPLAIN'),
+			'L_PASSWORD_EXPLAIN'	=> $this->language->lang($this->config['pass_complex'] . '_EXPLAIN', $this->language->lang('CHARACTERS', (int) $this->config['min_pass_chars']), $this->language->lang('CHARACTERS', (int) $this->config['max_pass_chars'])) . ' ' . $this->language->lang($this->config['email_enable'] ? 'ADDUSER_PASSWORD_EXPLAIN' : 'ADDUSER_PASSWORD_EXPLAIN_NO_EMAIL'),
 			'L_USERNAME_EXPLAIN'	=> $this->language->lang($this->config['allow_name_chars'] . '_EXPLAIN', $this->language->lang('CHARACTERS', (int) $this->config['min_name_chars']), $this->language->lang('CHARACTERS', (int) $this->config['max_name_chars'])),
 			'L_ADD_USER_EXPLAIN'	=> sprintf($this->language->lang('ADDUSER_ADD_USER_EXPLAIN'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=acp_board&amp;mode=registration') . '">', '</a>'),
 			'L_REG_COND'			=> $this->get_registration_condition(),
@@ -294,7 +313,7 @@ class adduser_module
 			'S_USER_ADD'		=> true,
 			'S_GROUP_OPTIONS'	=> $this->get_groups($group_selected),
 			'S_LANG_OPTIONS'	=> $s_lang_options,
-			'S_ADMIN_ACTIVATE'	=> ($this->config['require_activation'] == USER_ACTIVATION_ADMIN) ? true : false,
+			'S_ADMIN_ACTIVATE'	=> $this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->config['email_enable'],
 			'S_NEW_USER_SET'	=> !empty($this->config['new_member_post_limit']) ? true : false,
 			'S_NEW_USER_ENABLE'	=> $new_user,
 
@@ -400,7 +419,7 @@ class adduser_module
 			// Lets the footer script hide "default group" while no group is chosen
 			'S_USER_ADD'		=> true,
 			'S_GROUP_OPTIONS'	=> $this->get_groups($options['group']),
-			'S_ADMIN_ACTIVATE'	=> $this->config['require_activation'] == USER_ACTIVATION_ADMIN,
+			'S_ADMIN_ACTIVATE'	=> $this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->config['email_enable'],
 			'S_NEW_USER_SET'	=> !empty($this->config['new_member_post_limit']),
 			'S_NEW_USER_ENABLE'	=> $options['new_user'],
 			'S_DEFAULT_GROUP'	=> $options['default_group'],
@@ -500,12 +519,17 @@ class adduser_module
 
 			$password_generated = ($data['new_password'] === '');
 
-			if ($password_generated)
+			// Without board email a generated password could never reach the user
+			if ($password_generated && !$this->config['email_enable'])
+			{
+				$errors[] = $this->language->lang('ADDUSER_CSV_PASSWORD_REQUIRED');
+			}
+			else if ($password_generated)
 			{
 				$data['new_password'] = $this->generate_password();
 			}
 
-			$errors = array_merge($errors, $this->validate_csv_account($data, $birthday, true));
+			$errors = array_merge($errors, $this->validate_csv_account($data, $birthday, $data['new_password'] !== ''));
 
 			$username_clean = utf8_clean_string($data['username']);
 
@@ -881,7 +905,12 @@ class adduser_module
 		// Send a message to the user if needed
 		$send_reset_link = true;
 
-		if ($this->config['require_activation'] == USER_ACTIVATION_SELF && $this->config['email_enable'])
+		if (!$this->config['email_enable'])
+		{
+			// The account is active (see above) and nothing is sent
+			$message = 'ACP_ADDUSER_ACCOUNT_ADDED_NO_EMAIL';
+		}
+		else if ($this->config['require_activation'] == USER_ACTIVATION_SELF)
 		{
 			$message = 'ACP_ADDUSER_ACCOUNT_INACTIVE';
 			$email_template = '@phpbbmodders_adduser/user_added_inactive';
@@ -890,7 +919,7 @@ class adduser_module
 			// email tells the user to use "Forgot password" once activated instead.
 			$send_reset_link = false;
 		}
-		else if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->config['email_enable'] && !$admin_activate)
+		else if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && !$admin_activate)
 		{
 			$message = 'ACP_ADDUSER_ACCOUNT_INACTIVE_ADMIN';
 			$email_template = '@phpbbmodders_adduser/user_added_admin_welcome_inactive';
@@ -940,7 +969,9 @@ class adduser_module
 			$this->send_email($email_template, $data['lang'], $data['email'], $data['username'], $email_vars, $options['use_queue']);
 		}
 
-		if ($this->config['require_activation'] == USER_ACTIVATION_ADMIN && !$admin_activate)
+		// Only an inactive account waits for an administrator; without board email
+		// the account is created active
+		if ($user_type == USER_INACTIVE && $this->config['require_activation'] == USER_ACTIVATION_ADMIN)
 		{
 			$phpbb_notifications = $this->phpbb_container->get('notification_manager');
 			$phpbb_notifications->add_notifications('notification.type.admin_activate_user', [
@@ -1157,6 +1188,12 @@ class adduser_module
 	 */
 	protected function get_registration_condition()
 	{
+		// Activation needs email, so without it every account is active at once
+		if (!$this->config['email_enable'])
+		{
+			return $this->language->lang('ACP_ADDUSER_NO_EMAIL');
+		}
+
 		switch ($this->config['require_activation'])
 		{
 			case USER_ACTIVATION_SELF:

@@ -40,12 +40,14 @@ if (empty($lang) || !is_array($lang))
 $lang = array_merge($lang, [
 	// ACP Module
 	'ACP_ADD_USER'					=> 'Add User',
-	'ADDUSER_DIR_NOT_EXIST'					=> 'The language you have chosen %s does not have the files needed for the extension. Please translate them and upload to the %s directory of the extension.',
+	'ADDUSER_DIR_NOT_EXIST'					=> 'The language you have chosen %1$s does not have the files needed for the extension. Please translate them and upload to the %2$s directory of the extension.',
 	'ACP_ADDUSER_ACCOUNT_ADDED'				=> 'The user account has been created. A link was sent to the email address you provided; the user sets their own password with it. The email states how long the link is valid.',
 	'ACP_ADDUSER_ACCOUNT_INACTIVE'			=> 'The user account has been created. However, the forum settings require the user to activate their account.<br>An activation key has been sent to the email address you provided for the user. After activating, the user sets their own password with “Forgot password”.',
-	'ACP_ADDUSER_ACCOUNT_INACTIVE_ADMIN'	=> 'The user account has been created. However, the forum settings require account activation by an administrator.<br>An email has been sent to the Administrators and the user will be informed when their account has been activated',
+	'ACP_ADDUSER_ACCOUNT_INACTIVE_ADMIN'	=> 'The user account has been created. However, the forum settings require account activation by an administrator.<br>An email has been sent to the Administrators and the user will be informed when their account has been activated.',
+	'ACP_ADDUSER_ACCOUNT_ADDED_NO_EMAIL'	=> 'The user account has been created and is active. Board email is disabled, so no email was sent: give the user their username and password yourself.',
 	'ACP_ADDUSER_ADMIN_ACTIVATE'			=> 'An email will be dispatched to an Administrator for account activation. Alternatively you may check the activate account box below to activate the account instantly once created. The user will receive a link to set their own password.',
 	'ACP_ADDUSER_EMAIL_ACTIVATE'			=> 'Once the account has been created, the user will receive an email containing an activation link to activate the account. After activating, they set their own password with “Forgot password”.',
+	'ACP_ADDUSER_NO_EMAIL'				=> 'Board email is disabled, so the account is active at once and no email is sent. Enter a password and give it to the user yourself.',
 	'ACP_ADDUSER_INSTANT_ACTIVATE'			=> 'The account will be activated instantly. The user will receive a link to set their own password.',
 
 	'ADDUSER_ADD_USER'					=> 'Add User',
@@ -55,8 +57,10 @@ $lang = array_merge($lang, [
 	'ADDUSER_GROUP_ADD'					=> 'Making a selection here will add the user to the group selected as well as to the registered users group.',
 	'ADDUSER_CONTINUE_EDIT_USER'		=> '%1$sClick here to manage %2$s’s profile%3$s',
 	'ADDUSER_PASSWORD_EXPLAIN'			=> 'If left blank a password will be generated. It is never emailed — the user sets their own password with the link.',
+	'ADDUSER_PASSWORD_EXPLAIN_NO_EMAIL'	=> 'Required while board email is disabled: no email can reach the user, so give them the password yourself.',
+	'ADDUSER_PASSWORD_REQUIRED'			=> 'Board email is disabled, so enter a password: a generated one could never reach the user.',
 	'ADDUSER_ENABLE_NEWUSER'			=> 'Enable new user',
-	'ADDUSER_ENABLE_NEWUSER_EXPLAIN'	=> 'If set as yes the user will be added to the newly registered user group',
+	'ADDUSER_ENABLE_NEWUSER_EXPLAIN'	=> 'If set as yes the user will be added to the newly registered user group.',
 
 	'ADDUSER_GROUP_NOT_ALLOWED'			=> 'New accounts cannot be added to the selected group.',
 
@@ -125,6 +129,7 @@ $lang = array_merge($lang, [
 	'ADDUSER_CSV_TOO_MANY_ROWS'			=> 'The file has more than %d rows. Split it into smaller files.',
 	'ADDUSER_CSV_NO_ROWS'				=> 'The file has no users below the first row.',
 	'ADDUSER_CSV_TOO_MANY_FIELDS'		=> 'This row has more fields than the %d columns named in the first row.',
+	'ADDUSER_CSV_PASSWORD_REQUIRED'		=> 'Board email is disabled, so this row needs a password: a generated one could never reach the user.',
 	'ADDUSER_CSV_BIRTHDAY_FORMAT'		=> 'The birthday must be written as DD-MM-YYYY.',
 	'ADDUSER_CSV_DUPLICATE_USERNAME'	=> 'The same username is on row %d.',
 	'ADDUSER_CSV_DUPLICATE_EMAIL'		=> 'The same email address is on row %d.',

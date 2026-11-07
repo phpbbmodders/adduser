@@ -54,7 +54,7 @@
 		{% if S_BIRTHDAYS_ENABLED %}
 		<dl>
 			<dt><label for="birthday">{{ lang('BIRTHDAY') ~ lang('COLON') }}</label><br><span>{{ lang('BIRTHDAY_EXPLAIN') }}</span></dt>
-			<dd>{{ lang('DAY') ~ lang('COLON') }} <select id="birthday" name="bday_day">{{ S_BIRTHDAY_DAY_OPTIONS }}</select> {{ lang('MONTH') ~ lang('COLON') }} <select name="bday_month">{{ S_BIRTHDAY_MONTH_OPTIONS }}</select> {{ lang('YEAR') ~ lang('COLON') }} <select name="bday_year">{{ S_BIRTHDAY_YEAR_OPTIONS }}</select></dd>
+			<dd>{{ lang('DAY') ~ lang('COLON') }} <select id="birthday" name="bday_day">{{ S_BIRTHDAY_DAY_OPTIONS }}</select> <label for="bday_month">{{ lang('MONTH') ~ lang('COLON') }}</label> <select id="bday_month" name="bday_month">{{ S_BIRTHDAY_MONTH_OPTIONS }}</select> <label for="bday_year">{{ lang('YEAR') ~ lang('COLON') }}</label> <select id="bday_year" name="bday_year">{{ S_BIRTHDAY_YEAR_OPTIONS }}</select></dd>
 		</dl>
 		{% endif %}
 		{% if S_ADMIN_ACTIVATE %}
@@ -67,7 +67,7 @@
 
 	{% if profile_fields %}
 	<fieldset>
-		<dl><dd><strong>{{ lang('ITEMS_REQUIRED') }}</strong></dd></dl>
+		<p><strong>{{ lang('ITEMS_REQUIRED') }}</strong></p>
 
 		{% for profile_field in profile_fields %}
 		<dl>
