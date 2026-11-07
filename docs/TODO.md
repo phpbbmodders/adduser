@@ -6,7 +6,8 @@ Ideas not yet built, practical and speculative alike.
 
 Fold the job of phpbbmodders/bulkuseradd (david63's Bulk User Add) into this
 extension as a second mode of the **Add User** page, so boards need one
-extension instead of two. bulkuseradd can be archived once this ships.
+extension instead of two. bulkuseradd is slated for archiving once this ships;
+its README says so.
 
 Planned behavior:
 
@@ -28,9 +29,10 @@ Planned behavior:
   confirms, and rows with errors are skipped.
 - A summary afterwards: created, skipped and why.
 
-CSV only, no Excel: bulkuseradd reads Excel through PhpSpreadsheet, which
-ships a large `vendor/` folder. CSV needs only PHP itself, and admins can
-save a spreadsheet as CSV.
+CSV only, no Excel (decided 11/06/2026): bulkuseradd reads Excel through
+PhpSpreadsheet, which ships a large `vendor/` folder. CSV needs only PHP
+itself, and admins can save an Excel or other spreadsheet as CSV from Excel or
+LibreOffice before uploading it.
 
 Still needs deciding:
 
