@@ -370,7 +370,7 @@ class adduser_module
 
 				// The column name in CSV_UNKNOWN_COLUMN comes straight from the file
 				$error[] = $this->language->lang(...array_map(function ($argument) {
-					return is_string($argument) ? htmlspecialchars($argument, ENT_COMPAT, 'UTF-8') : $argument;
+					return is_string($argument) ? utf8_htmlspecialchars($argument) : $argument;
 				}, $parsed['error']));
 			}
 		}
