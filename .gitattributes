@@ -17,3 +17,4 @@
 tests/ export-ignore
 phpunit.xml.* export-ignore
 .editorconfig export-ignore
+docs/update/ export-ignore

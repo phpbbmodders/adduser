@@ -11,10 +11,7 @@
 namespace phpbbmodders\adduser;
 
 /**
- * Add User extension base
- *
- * It is recommended to remove this file from
- * an extension if it is not going to be used.
+ * Add User extension base: checks the phpBB and PHP versions before enabling
  */
 class ext extends \phpbb\extension\base
 {
