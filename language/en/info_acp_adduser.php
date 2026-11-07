@@ -54,13 +54,26 @@ $lang = array_merge($lang, [
 	'CONFIRM_PASSWORD'			=> 'Confirm password',
 	'ADDUSER_EDIT_USER_GROUPS'			=> '%sClick here to edit the user groups for this user%s',
 	'ADDUSER_GROUP_ADD'					=> 'Making a selection here will add the user to the group selected as well as to the registered users group.',
-	'ADDUSER_GROUP_DEFAULT_EXPLAIN'		=> 'Checking this box will set the group selected above to be the users default.',
 	'ADDUSER_CONTINUE_EDIT_USER'		=> '%1$sClick here to manage %2$s’s profile%3$s',
 	'ADDUSER_PASSWORD_EXPLAIN'			=> 'If left blank a password will be generated. It is never emailed — the user sets their own password with the link.',
 	'ADDUSER_ENABLE_NEWUSER'			=> 'Enable new user',
 	'ADDUSER_ENABLE_NEWUSER_EXPLAIN'	=> 'If set as yes the user will be added to the newly registered user group',
 
 	'ADDUSER_GROUP_NOT_ALLOWED'			=> 'New accounts cannot be added to the selected group.',
+
+	// Default group
+	'ADDUSER_DEFAULT_GROUP'				=> 'Default group',
+	'ADDUSER_DEFAULT_GROUP_EXPLAIN'		=> 'The group the account shows as its own; it sets the rank and colour. Newly registered users also marks the account as a new user.',
+	'ADDUSER_DEFAULT_GROUP_SELECTED'	=> 'The group chosen above',
+	'ADDUSER_DEFAULT_GROUP_NONE'		=> 'Choose a group above to make it the default group.',
+	'ADDUSER_DEFAULT_GROUP_UNAVAILABLE'	=> 'The chosen default group is not available on this board.',
+
+	// Administrator copy of welcome emails
+	'ADDUSER_ADMIN_COPY'				=> 'Send a copy of Add User welcome emails',
+	'ADDUSER_ADMIN_COPY_EXPLAIN'		=> 'When the Add User extension creates accounts, the administrator who created them gets one email listing the accounts and which welcome email each was sent. The copy leaves out the activation and set-password links.',
+	'ADDUSER_COPY_KIND_WELCOME'			=> 'a link to set their own password',
+	'ADDUSER_COPY_KIND_ACTIVATE'		=> 'an activation link; they set their password with “Forgot password” after activating',
+	'ADDUSER_COPY_KIND_ADMIN_ACTIVATE'	=> 'a notice that an administrator must activate the account, with a link to set their password once activated',
 
 	// Add users from CSV
 	'ACP_ADDUSER_CSV'			=> 'Add users from CSV',

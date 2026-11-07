@@ -1,0 +1,12 @@
+Subject: Accounts created on "{SITENAME}"
+
+Hello {USERNAME},
+
+This is your copy of the welcome emails the Add User extension just sent. You created these accounts on "{SITENAME}", and each was emailed:
+
+{ACCOUNTS}
+
+The activation and set-password links in the welcome emails are not included in this copy.
+
+
+{EMAIL_SIG}
