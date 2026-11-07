@@ -66,8 +66,8 @@ class adduser_module
 	/** @var \phpbb\language\language */
 	protected $language;
 
-	/** @var int|null Cached by get_registered_group_id() */
-	protected $registered_group_id;
+	/** @var int[] Special group ids by name, cached by get_special_group_id() */
+	protected $special_group_ids = [];
 
 	public function main($id, $mode)
 	{
@@ -101,9 +101,10 @@ class adduser_module
 		}
 
 		$admin_activate = ($request->variable('activate', 0)) ? (($this->config['require_activation'] == USER_ACTIVATION_ADMIN) ? true : false) : false;
-		$group_default = $request->variable('group_default', 0);
 		$group_selected = $request->variable('group', 0);
-		$new_user = $request->variable('new_user', 0);
+		$default_group = $this->read_default_group_choice();
+		// Newly registered users as the default group only works for a new user
+		$new_user = ($default_group === 'newly_registered') ? 1 : $request->variable('new_user', 0);
 
 		$this->page_title = $this->language->lang('ACP_ADD_USER');
 
@@ -184,6 +185,12 @@ class adduser_module
 				$error[] = 'ADDUSER_GROUP_NOT_ALLOWED';
 			}
 
+			$default_group_error = $this->check_default_group_choice($default_group, $data['group']);
+			if ($default_group_error !== '')
+			{
+				$error[] = $default_group_error;
+			}
+
 			// Replace "error" strings with their real, localised form
 			$error = array_map([$this->language, 'lang'], $error);
 
@@ -193,7 +200,7 @@ class adduser_module
 
 				$account = $this->create_account($data, $cp_data, [
 					'group'				=> $data['group'],
-					'group_default'		=> !empty($group_default),
+					'default_group'		=> $default_group,
 					'new_user'			=> !empty($new_user),
 					'admin_activate'	=> $admin_activate,
 					'use_queue'			=> false,
@@ -203,6 +210,8 @@ class adduser_module
 				$message[] = sprintf($this->language->lang('ADDUSER_CONTINUE_EDIT_USER'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=overview&amp;u=' . $account['user_id']) . '">', $data['username'], '</a>');
 				$message[] = sprintf($this->language->lang('ADDUSER_EDIT_USER_GROUPS'), '<a href="' . append_sid("{$phpbb_admin_path}index.$phpEx", 'i=users&amp;mode=groups&amp;u=' . $account['user_id']) . '">', '</a>');
 				$message[] = adm_back_link($this->u_action);
+
+				$this->send_admin_copy([$account], false);
 
 				trigger_error(implode('<br>', $message));
 			}
@@ -290,7 +299,7 @@ class adduser_module
 			'S_NEW_USER_ENABLE'	=> $new_user,
 
 			'U_ADMIN_ACTIVATE'	=> ($admin_activate) ? 'checked="checked"' : '',
-			'U_GROUP_DEFAULT'	=> ($group_default) ? 'checked="checked"' : '',
+			'S_DEFAULT_GROUP'	=> $default_group,
 		]);
 
 		$this->user->profile_fields = [];
@@ -318,11 +327,12 @@ class adduser_module
 
 		$options = [
 			'group'				=> $this->request->variable('group', 0),
-			'group_default'		=> (bool) $this->request->variable('group_default', 0),
+			'default_group'		=> $this->read_default_group_choice(),
 			'new_user'			=> $this->config['new_member_post_limit'] && $this->request->variable('new_user', 0),
 			'admin_activate'	=> $this->config['require_activation'] == USER_ACTIVATION_ADMIN && $this->request->variable('activate', 0),
 			'use_queue'			=> true,
 		];
+		$options['new_user'] = $options['new_user'] || $options['default_group'] === 'newly_registered';
 		$error = [];
 
 		if ($this->request->is_set_post('create'))
@@ -353,6 +363,12 @@ class adduser_module
 			if ($options['group'] && !isset($this->get_allowed_groups()[$options['group']]))
 			{
 				$error[] = $this->language->lang('ADDUSER_GROUP_NOT_ALLOWED');
+			}
+
+			$default_group_error = $this->check_default_group_choice($options['default_group'], $options['group']);
+			if ($default_group_error !== '')
+			{
+				$error[] = $this->language->lang($default_group_error);
 			}
 
 			$contents = $this->read_csv_upload($error);
@@ -387,7 +403,7 @@ class adduser_module
 			'S_ADMIN_ACTIVATE'	=> $this->config['require_activation'] == USER_ACTIVATION_ADMIN,
 			'S_NEW_USER_SET'	=> !empty($this->config['new_member_post_limit']),
 			'S_NEW_USER_ENABLE'	=> $options['new_user'],
-			'S_GROUP_DEFAULT'	=> $options['group_default'],
+			'S_DEFAULT_GROUP'	=> $options['default_group'],
 			'S_ACTIVATE'		=> $options['admin_activate'],
 
 			'U_ACTION'			=> $this->u_action,
@@ -578,19 +594,27 @@ class adduser_module
 
 		$options = [
 			'group'				=> (int) $payload['options']['group'],
-			'group_default'		=> !empty($payload['options']['group_default']),
+			'default_group'		=> (string) $payload['options']['default_group'],
 			'new_user'			=> !empty($payload['options']['new_user']),
 			'admin_activate'	=> !empty($payload['options']['admin_activate']),
 			'use_queue'			=> true,
 		];
 
-		// Check again: the group may have been deleted since the check page
+		// Check again: the group may have been deleted, or the board settings
+		// changed, since the check page
 		if ($options['group'] && !isset($this->get_allowed_groups()[$options['group']]))
 		{
 			trigger_error($this->language->lang('ADDUSER_GROUP_NOT_ALLOWED') . adm_back_link($this->u_action), E_USER_WARNING);
 		}
 
+		$default_group_error = $this->check_default_group_choice($options['default_group'], $options['group']);
+		if ($default_group_error !== '')
+		{
+			trigger_error($this->language->lang($default_group_error) . adm_back_link($this->u_action), E_USER_WARNING);
+		}
+
 		$created = 0;
+		$accounts = [];
 		$skipped = $payload['skipped'];
 
 		foreach ($payload['ready'] as $row)
@@ -612,6 +636,7 @@ class adduser_module
 			}
 
 			$account = $this->create_account($data, [], $options);
+			$accounts[] = $account;
 			$created++;
 
 			$this->template->assign_block_vars('csv_created', [
@@ -621,6 +646,8 @@ class adduser_module
 				'U_USER'	=> append_sid("{$this->phpbb_admin_path}index.{$this->php_ext}", 'i=users&amp;mode=overview&amp;u=' . $account['user_id']),
 			]);
 		}
+
+		$this->send_admin_copy($accounts, true);
 
 		usort($skipped, function ($a, $b) {
 			return $a['row'] <=> $b['row'];
@@ -749,15 +776,22 @@ class adduser_module
 	 *
 	 * @param array $data    username, email, lang, tz, password_hash and, with birthdays enabled, optionally user_birthday
 	 * @param array $cp_data Custom profile field values
-	 * @param array $options group (int, 0 for none), group_default, new_user, admin_activate and use_queue (all bool)
-	 * @return array ['user_id' => int, 'message' => language key describing what the user was sent]
+	 * @param array $options group (int, 0 for none), default_group (registered, newly_registered or group),
+	 *                       new_user, admin_activate and use_queue (bool)
+	 * @return array [
+	 *     'user_id'  => int,
+	 *     'username' => string,
+	 *     'email'    => string,
+	 *     'message'  => language key describing what the user was sent,
+	 *     'emailed'  => bool, whether a welcome email was sent
+	 * ]
 	 */
 	protected function create_account(array $data, array $cp_data, array $options)
 	{
 		$admin_activate = $options['admin_activate'];
 		$server_url = generate_board_url();
 
-		$group_id = $this->get_registered_group_id();
+		$group_id = $this->get_special_group_id('REGISTERED');
 
 		// Use group_id here
 		if (!$group_id)
@@ -800,7 +834,7 @@ class adduser_module
 			$user_row['user_birthday'] = $data['user_birthday'];
 		}
 
-		if ($this->config['new_member_post_limit'] && $options['new_user'])
+		if ($this->config['new_member_post_limit'] && ($options['new_user'] || $options['default_group'] === 'newly_registered'))
 		{
 			$user_row['user_new'] = 1;
 		}
@@ -816,14 +850,30 @@ class adduser_module
 
 		if (!empty($options['group']))
 		{
-			if (!empty($options['group_default']))
-			{
-				group_user_add($options['group'], [$user_id], false, false, true);
-			}
-			else
-			{
-				group_user_add($options['group'], [$user_id]);
-			}
+			group_user_add($options['group'], [$user_id]);
+		}
+
+		// Set the chosen default group. user_add() may already have made Newly
+		// registered users the default, following the board's own setting; the
+		// admin's choice here wins either way.
+		switch ($options['default_group'])
+		{
+			case 'group':
+				$default_group_id = (int) $options['group'];
+			break;
+
+			case 'newly_registered':
+				$default_group_id = $this->get_special_group_id('NEWLY_REGISTERED');
+			break;
+
+			default:
+				$default_group_id = (int) $group_id;
+			break;
+		}
+
+		if ($default_group_id)
+		{
+			group_set_user_default($default_group_id, [$user_id]);
 		}
 
 		$this->log->add('admin', $this->user->data['user_id'], $this->user->ip, 'LOG_USER_ADDED', time(), [$data['username']]);
@@ -900,29 +950,120 @@ class adduser_module
 			]);
 		}
 
-		return ['user_id' => (int) $user_id, 'message' => $message];
+		return [
+			'user_id'	=> (int) $user_id,
+			'username'	=> $data['username'],
+			'email'		=> $data['email'],
+			'message'	=> $message,
+			'emailed'	=> (bool) $this->config['email_enable'],
+		];
 	}
 
 	/**
-	 * Id of the Registered users group, looked up once per request: the CSV
+	 * Id of one of phpBB's special groups, looked up once per request: the CSV
 	 * page creates many accounts in one go.
 	 *
+	 * @param string $group_name Special group name, e.g. REGISTERED
 	 * @return int 0 when the group is missing
 	 */
-	protected function get_registered_group_id()
+	protected function get_special_group_id($group_name)
 	{
-		if ($this->registered_group_id === null)
+		if (!isset($this->special_group_ids[$group_name]))
 		{
 			$sql = 'SELECT group_id
 				FROM ' . GROUPS_TABLE . "
-				WHERE group_name = 'REGISTERED'
+				WHERE group_name = '" . $this->db->sql_escape($group_name) . "'
 					AND group_type = " . GROUP_SPECIAL;
 			$result = $this->db->sql_query($sql, 3600);
-			$this->registered_group_id = (int) $this->db->sql_fetchfield('group_id');
+			$this->special_group_ids[$group_name] = (int) $this->db->sql_fetchfield('group_id');
 			$this->db->sql_freeresult($result);
 		}
 
-		return $this->registered_group_id;
+		return $this->special_group_ids[$group_name];
+	}
+
+	/**
+	 * Read the posted default-group choice. On a fresh form it follows the
+	 * board's "Set Newly registered users group to default" setting.
+	 *
+	 * @return string registered, newly_registered or group
+	 */
+	protected function read_default_group_choice()
+	{
+		$board_default = ($this->config['new_member_post_limit'] && $this->config['new_member_group_default']) ? 'newly_registered' : 'registered';
+		$choice = $this->request->variable('default_group', $board_default);
+
+		return in_array($choice, ['registered', 'newly_registered', 'group'], true) ? $choice : 'registered';
+	}
+
+	/**
+	 * Check that a default-group choice can be applied.
+	 *
+	 * @param string $choice registered, newly_registered or group
+	 * @param int    $group  Group chosen in the group selector, 0 for none
+	 * @return string Language key of the problem, '' when the choice is fine
+	 */
+	protected function check_default_group_choice($choice, $group)
+	{
+		if ($choice === 'group' && !$group)
+		{
+			return 'ADDUSER_DEFAULT_GROUP_NONE';
+		}
+
+		// Newly registered users only exists for accounts while the post limit is on
+		if ($choice === 'newly_registered' && !$this->config['new_member_post_limit'])
+		{
+			return 'ADDUSER_DEFAULT_GROUP_UNAVAILABLE';
+		}
+
+		if (!in_array($choice, ['registered', 'newly_registered', 'group'], true))
+		{
+			return 'ADDUSER_DEFAULT_GROUP_UNAVAILABLE';
+		}
+
+		return '';
+	}
+
+	/**
+	 * Email the admin who created accounts a copy confirming the welcome
+	 * emails, when the board setting asks for it. One email covers every
+	 * account of a request, so a CSV file sends one, not one per row. The
+	 * welcome emails' activation and set-password links are left out: they
+	 * would let anyone holding the copy take the accounts over.
+	 *
+	 * @param array $accounts  create_account() results
+	 * @param bool  $use_queue Whether to put the email in the board's queue
+	 * @return void
+	 */
+	protected function send_admin_copy(array $accounts, $use_queue)
+	{
+		$accounts = array_filter($accounts, function ($account) {
+			return $account['emailed'];
+		});
+
+		if (!$this->config['adduser_admin_copy'] || !$this->config['email_enable'] || !count($accounts) || empty($this->user->data['user_email']))
+		{
+			return;
+		}
+
+		$kinds = [
+			'ACP_ADDUSER_ACCOUNT_ADDED'				=> 'ADDUSER_COPY_KIND_WELCOME',
+			'ACP_ADDUSER_ACCOUNT_INACTIVE'			=> 'ADDUSER_COPY_KIND_ACTIVATE',
+			'ACP_ADDUSER_ACCOUNT_INACTIVE_ADMIN'	=> 'ADDUSER_COPY_KIND_ADMIN_ACTIVATE',
+		];
+		$lines = [];
+
+		foreach ($accounts as $account)
+		{
+			$lines[] = '- ' . htmlspecialchars_decode($account['username']) . ' <' . $account['email'] . '>: ' . htmlspecialchars_decode($this->language->lang($kinds[$account['message']]));
+		}
+
+		$lang = $this->extension_has_language($this->user->data['user_lang']) ? $this->user->data['user_lang'] : 'en';
+
+		$this->send_email('@phpbbmodders_adduser/user_added_admin_copy', $lang, $this->user->data['user_email'], $this->user->data['username'], [
+			'USERNAME'	=> htmlspecialchars_decode($this->user->data['username']),
+			'ACCOUNTS'	=> implode("\n", $lines),
+		], $use_queue);
 	}
 
 	/**

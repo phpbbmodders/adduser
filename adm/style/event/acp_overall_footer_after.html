@@ -1,28 +1,3 @@
 {% if S_USER_ADD %}
-<script type="text/javascript">
-(function($) { // Avoid conflicts with other libraries
-	'use strict';
-
-	$(function() {
-		var selected_option = $('#group').val();
-
-		if (selected_option == false) {
-			$('.default_group').fadeOut('fast');
-		}
-
-		$('#group').change(function() {
-			var group = $(this).val();
-
-			if (group == false) {
-				$('.default_group').fadeOut('fast', function() {
-					$('#group_default').prop('checked', false);
-				});
-			}
-			else {
-				$('.default_group').fadeIn('fast');
-			}
-		});
-	});
-})(jQuery);
-</script>
+	{% INCLUDEJS '@phpbbmodders_adduser/adduser.js' %}
 {% endif %}

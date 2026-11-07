@@ -1,0 +1,5 @@
+services:
+    phpbbmodders.adduser.listener:
+        class: phpbbmodders\adduser\event\listener
+        tags:
+            - { name: event.listener }

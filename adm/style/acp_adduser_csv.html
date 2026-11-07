@@ -28,10 +28,7 @@
 			<dt><label for="group">{{ lang('GROUPS') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_GROUP_ADD') }}</span></dt>
 			<dd>{{ S_GROUP_OPTIONS }}</dd>
 		</dl>
-		<dl class="default_group">
-			<dt><label for="group_default">{{ lang('GROUP_DEFAULT') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_GROUP_DEFAULT_EXPLAIN') }}</span></dt>
-			<dd><input id="group_default" class="radio" type="checkbox" value="1" name="group_default"{% if S_GROUP_DEFAULT %} checked="checked"{% endif %} /></dd>
-		</dl>
+		{% include 'acp_adduser_default_group.html' %}
 		{% if S_NEW_USER_SET %}
 		<dl>
 			<dt><label for="new_user">{{ lang('ADDUSER_ENABLE_NEWUSER') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_ENABLE_NEWUSER_EXPLAIN') }}</span></dt>

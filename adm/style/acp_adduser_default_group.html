@@ -1,0 +1,10 @@
+		<dl>
+			<dt><label for="default_group_registered">{{ lang('ADDUSER_DEFAULT_GROUP') ~ lang('COLON') }}</label><br><span>{{ lang('ADDUSER_DEFAULT_GROUP_EXPLAIN') }}</span></dt>
+			<dd>
+				<label><input type="radio" class="radio" name="default_group" id="default_group_registered" value="registered"{% if S_DEFAULT_GROUP == 'registered' %} checked="checked"{% endif %} /> {{ lang('G_REGISTERED') }}</label><br>
+				{% if S_NEW_USER_SET %}
+				<label><input type="radio" class="radio" name="default_group" id="default_group_newly_registered" value="newly_registered"{% if S_DEFAULT_GROUP == 'newly_registered' %} checked="checked"{% endif %} /> {{ lang('G_NEWLY_REGISTERED') }}</label><br>
+				{% endif %}
+				<label class="default_group"><input type="radio" class="radio" name="default_group" id="default_group_group" value="group"{% if S_DEFAULT_GROUP == 'group' %} checked="checked"{% endif %} /> {{ lang('ADDUSER_DEFAULT_GROUP_SELECTED') }}</label>
+			</dd>
+		</dl>
