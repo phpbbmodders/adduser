@@ -71,7 +71,7 @@ jobs:
       # To override the default PHP versions tested (7.2 through 8.4):
 
       # Preferred PHP version used for all test jobs.
-      PRIMARY_PHP_VERSION: '8.0'
+      PRIMARY_PHP_VERSION: '8.1'
 
       # The MySQL and PostgreSQL jobs run tests across multiple PHP versions.
       # List the PHP versions you want your extension tested with.
