@@ -17,7 +17,7 @@ Lets administrators create user accounts from the ACP.
 ## Requirements
 
 - phpBB 3.3.19 or later; phpBB 4.0 works too (tested with its development version)
-- PHP 8.3.36 or later
+- PHP 8.1 or later
 
 ## Installation
 
