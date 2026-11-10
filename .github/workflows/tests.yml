@@ -75,7 +75,7 @@ jobs:
 
       # The MySQL and PostgreSQL jobs run tests across multiple PHP versions.
       # List the PHP versions you want your extension tested with.
-      PHP_VERSION_MATRIX: '["8.0", "8.1", "8.2", "8.3", "8.4"]'
+      PHP_VERSION_MATRIX: '["8.1", "8.2", "8.3", "8.4"]'
 
       # Generate a code coverage report (see documentation below)?
       CODECOV: 0
